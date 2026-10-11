@@ -14,6 +14,9 @@ interface NicheSidebarProps {
   selectedNiche: string;
   onSelectNiche: (nicheTag: string) => void;
   onAddNiche: (nicheTag: string) => void;
+  onTriggerScrape?: (nicheTag: string) => Promise<void>;
+  isScraping?: boolean;
+  scrapingNiche?: string | null;
   timeframe: "24h" | "7d" | "30d";
   onTimeframeChange: (timeframe: "24h" | "7d" | "30d") => void;
   region: "US" | "UK" | "CA" | "AU";
@@ -26,6 +29,9 @@ export function NicheSidebar({
   selectedNiche,
   onSelectNiche,
   onAddNiche,
+  onTriggerScrape,
+  isScraping = false,
+  scrapingNiche = null,
   timeframe,
   onTimeframeChange,
   region,
@@ -35,8 +41,13 @@ export function NicheSidebar({
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newTag.trim()) {
-      onAddNiche(newTag.trim().replace(/^#/, ""));
+    const clean = newTag.trim().replace(/^#/, "");
+    if (clean) {
+      if (onTriggerScrape) {
+        onTriggerScrape(clean);
+      } else {
+        onAddNiche(clean);
+      }
       setNewTag("");
     }
   };
@@ -69,21 +80,41 @@ export function NicheSidebar({
         </div>
 
         {/* Search / Track tag form */}
-        <form onSubmit={handleAddSubmit} className="relative flex items-center">
-          <input
-            type="text"
-            placeholder="Track new #niche..."
-            value={newTag}
-            onChange={(e) => setNewTag(e.target.value)}
-            className="w-full bg-surface-container-low text-on-surface font-body-sm text-xs pl-3 pr-8 py-2 rounded-lg outline-none focus:bg-surface-container border border-surface-container-high/60 focus:border-primary-container transition-all placeholder:text-on-surface-variant/50"
-          />
-          <button
-            type="submit"
-            className="absolute right-1.5 p-1 rounded bg-surface-container-high hover:bg-primary-container hover:text-on-primary text-on-surface-variant transition-colors"
-            title="Add Niche"
-          >
-            <span className="material-symbols-outlined text-xs">add</span>
-          </button>
+        <form onSubmit={handleAddSubmit} className="flex flex-col gap-2">
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              placeholder="Track / scrape #niche..."
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              disabled={isScraping}
+              className="w-full bg-surface-container-low text-on-surface font-body-sm text-xs pl-3 pr-8 py-2 rounded-lg outline-none focus:bg-surface-container border border-surface-container-high/60 focus:border-primary-container transition-all placeholder:text-on-surface-variant/50 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={isScraping || !newTag.trim()}
+              className="absolute right-1.5 p-1 rounded bg-surface-container-high hover:bg-primary-container hover:text-on-primary text-on-surface-variant transition-colors disabled:opacity-40 disabled:hover:bg-surface-container-high disabled:hover:text-on-surface-variant"
+              title="Discover viral TikToks"
+            >
+              {isScraping && (!scrapingNiche || scrapingNiche === newTag.toLowerCase().trim().replace(/^#/, "")) ? (
+                <span className="material-symbols-outlined text-xs animate-spin text-primary">
+                  progress_activity
+                </span>
+              ) : (
+                <span className="material-symbols-outlined text-xs">travel_explore</span>
+              )}
+            </button>
+          </div>
+          {isScraping && (
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-primary-container/15 border border-primary-container/30 text-primary animate-pulse">
+              <span className="material-symbols-outlined text-xs animate-spin">
+                progress_activity
+              </span>
+              <span className="font-data-badge text-[10px] truncate">
+                Scraping Apify #{scrapingNiche || newTag || "niche"} ({region})...
+              </span>
+            </div>
+          )}
         </form>
 
         {/* Niches List */}
@@ -125,23 +156,48 @@ export function NicheSidebar({
               const hashColor = tagColors[niche.tag.toLowerCase()] || "text-secondary";
 
               return (
-                <button
+                <div
                   key={niche.id}
-                  onClick={() => onSelectNiche(niche.tag)}
-                  className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-all group ${
+                  className={`flex items-center justify-between w-full px-2.5 py-1.5 rounded-lg transition-all group ${
                     isSelected
                       ? "bg-primary-container/20 text-on-surface border border-primary-container/30 shadow-sm"
                       : "hover:bg-surface-container-high/60 text-on-surface-variant hover:text-on-surface"
                   }`}
                 >
-                  <div className="flex items-center gap-2 truncate">
+                  <button
+                    type="button"
+                    onClick={() => onSelectNiche(niche.tag)}
+                    className="flex items-center gap-2 truncate flex-1 text-left"
+                  >
                     <span className={`font-data-badge text-xs ${hashColor}`}>#</span>
                     <span className="font-body-md text-xs truncate">{niche.tag}</span>
+                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="font-data-badge text-[11px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant group-hover:bg-surface-container">
+                      {niche.videoCount}
+                    </span>
+                    {onTriggerScrape && (
+                      <button
+                        type="button"
+                        title={`Discover viral videos for #${niche.tag} (${region})`}
+                        disabled={isScraping}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTriggerScrape(niche.tag);
+                        }}
+                        className="p-1 rounded text-on-surface-variant/70 hover:text-primary hover:bg-surface-container transition-colors disabled:opacity-40"
+                      >
+                        {isScraping && scrapingNiche === niche.tag.toLowerCase() ? (
+                          <span className="material-symbols-outlined text-xs animate-spin text-primary">
+                            progress_activity
+                          </span>
+                        ) : (
+                          <span className="material-symbols-outlined text-xs">sync</span>
+                        )}
+                      </button>
+                    )}
                   </div>
-                  <span className="font-data-badge text-[11px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant group-hover:bg-surface-container">
-                    {niche.videoCount}
-                  </span>
-                </button>
+                </div>
               );
             })}
           </div>

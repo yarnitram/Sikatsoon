@@ -32,10 +32,36 @@ const ToggleBookmarkSchema = z.object({
 // 2. Server Action Responses
 // ============================================================================
 
+export interface FeedVideoItem {
+  id: string;
+  authorUsername: string;
+  region: "US" | "UK" | "CA" | "AU";
+  niche: string;
+  caption: string;
+  viewsCount: number;
+  likesCount: number;
+  sharesCount: number;
+  commentsCount: number;
+  viralScore: number;
+  publishedAt: number;
+  videoUrl: string;
+  isSaved: boolean;
+  localFilePath?: string | null;
+  downloadStatus?: "IDLE" | "DOWNLOADING" | "DOWNLOADED" | "FAILED";
+}
+
+export interface NicheSummaryItem {
+  id: string;
+  tag: string;
+  videoCount: number;
+}
+
 export interface IngestionActionResult {
   success: boolean;
   insertedCount: number;
   message?: string;
+  videos?: FeedVideoItem[];
+  niches?: NicheSummaryItem[];
 }
 
 export interface ToggleBookmarkResult {
@@ -119,10 +145,14 @@ export async function triggerIngestionAction(
     revalidatePath("/feed");
     revalidatePath("/repurpose");
 
+    const feedData = await getFeedDataAction();
+
     return {
       success: true,
       insertedCount: inserted,
       message: `Ingested ${inserted} viral videos for #${niche} (${region})`,
+      videos: feedData.videos,
+      niches: feedData.niches,
     };
   } catch (error: any) {
     return {
@@ -219,5 +249,49 @@ export async function getSavedVideos() {
  */
 export async function getNiches() {
   return db.select().from(niches);
+}
+
+/**
+ * Query all feed videos and niches formatted for UI presentation.
+ */
+export async function getFeedDataAction(): Promise<{
+  videos: FeedVideoItem[];
+  niches: NicheSummaryItem[];
+}> {
+  const rawVideos = await db.select().from(videos).orderBy(desc(videos.viralScore));
+  const mappedVideos: FeedVideoItem[] = rawVideos.map((v) => ({
+    id: v.id,
+    authorUsername: v.authorUsername,
+    region: (v.region as "US" | "UK" | "CA" | "AU") || "US",
+    niche: v.niche,
+    caption: v.caption || "",
+    viewsCount: v.viewsCount,
+    likesCount: v.likesCount,
+    sharesCount: v.sharesCount,
+    commentsCount: v.commentsCount,
+    viralScore: v.viralScore,
+    publishedAt: v.publishedAt,
+    videoUrl: v.videoUrl,
+    isSaved: Boolean(v.isSaved),
+    localFilePath: v.localFilePath,
+    downloadStatus: v.downloadStatus as any,
+  }));
+
+  const rawNiches = await db.select().from(niches);
+  const mappedNiches: NicheSummaryItem[] = rawNiches.map((n) => {
+    const count = mappedVideos.filter(
+      (v) => v.niche.toLowerCase() === n.tag.toLowerCase()
+    ).length;
+    return {
+      id: n.id,
+      tag: n.tag,
+      videoCount: count,
+    };
+  });
+
+  return {
+    videos: mappedVideos,
+    niches: mappedNiches,
+  };
 }
 
