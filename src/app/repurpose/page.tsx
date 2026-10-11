@@ -1,10 +1,11 @@
-"use client";
+import { RepurposeClient } from "@/components/repurpose-client";
+import type { RepurposeItem } from "@/components/repurpose-studio";
+import { db, videos } from "@/db";
+import { eq, desc } from "drizzle-orm";
 
-import { useState } from "react";
-import { RepurposeStudio, type RepurposeItem } from "@/components/repurpose-studio";
-import { downloadMediaAction, transcribeMediaAction } from "@/app/actions/media";
+export const dynamic = "force-dynamic";
 
-const INITIAL_SAVED_ITEMS: RepurposeItem[] = [
+const DEMO_SAVED_ITEMS: RepurposeItem[] = [
   {
     id: "73829104859",
     authorUsername: "ecom_scaling",
@@ -70,58 +71,41 @@ const INITIAL_SAVED_ITEMS: RepurposeItem[] = [
   },
 ];
 
-export default function RepurposeRoute() {
-  const [items, setItems] = useState<RepurposeItem[]>(INITIAL_SAVED_ITEMS);
+export default async function RepurposeRoute() {
+  let dbSavedItems: RepurposeItem[] = [];
 
-  const handleDownload = async (id: string) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, downloadStatus: "DOWNLOADING" } : i))
-    );
-    try {
-      const res = await downloadMediaAction(id);
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === id
-            ? { ...i, downloadStatus: res.success ? "DOWNLOADED" : "FAILED", localFilePath: res.localFilePath }
-            : i
-        )
-      );
-    } catch {
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, downloadStatus: "FAILED" } : i))
-      );
+  try {
+    const rawSaved = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.isSaved, true))
+      .orderBy(desc(videos.viralScore));
+
+    if (rawSaved.length > 0) {
+      dbSavedItems = rawSaved.map((v) => ({
+        id: v.id,
+        authorUsername: v.authorUsername,
+        caption: v.caption || "",
+        viralScore: v.viralScore,
+        videoUrl: v.videoUrl,
+        downloadStatus: v.downloadStatus as any,
+        localFilePath: v.localFilePath,
+        transcriptionStatus: v.transcriptionStatus as any,
+        transcriptText: v.transcriptText,
+      }));
     }
-  };
+  } catch (err) {
+    console.error("Failed to query SQLite saved videos:", err);
+  }
 
-  const handleTranscribe = async (id: string) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, transcriptionStatus: "PROCESSING" } : i))
-    );
-    try {
-      const res = await transcribeMediaAction(id);
-      setItems((prev) =>
-        prev.map((i) =>
-          i.id === id
-            ? {
-                ...i,
-                transcriptionStatus: res.success ? "COMPLETED" : "FAILED",
-                transcriptText: res.transcriptText,
-              }
-            : i
-        )
-      );
-    } catch {
-      setItems((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, transcriptionStatus: "FAILED" } : i))
-      );
-    }
-  };
+  // If database has saved items, merge them ahead of demo items
+  const finalItems =
+    dbSavedItems.length > 0
+      ? [
+          ...dbSavedItems,
+          ...DEMO_SAVED_ITEMS.filter((d) => !dbSavedItems.some((s) => s.id === d.id)),
+        ]
+      : DEMO_SAVED_ITEMS;
 
-  return (
-    <RepurposeStudio
-      items={items}
-      onDownload={handleDownload}
-      onTranscribe={handleTranscribe}
-    />
-  );
+  return <RepurposeClient initialItems={finalItems} />;
 }

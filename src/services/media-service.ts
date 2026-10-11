@@ -17,6 +17,38 @@ export interface IMediaService {
   transcribeVideo(videoId: string, localFilePath: string): Promise<string>;
 }
 
+function resolveExecutable(name: "yt-dlp" | "ffmpeg"): string {
+  const envVar = name === "yt-dlp" ? process.env.YTDLP_PATH : process.env.FFMPEG_PATH;
+  if (envVar && fs.existsSync(envVar)) {
+    return envVar;
+  }
+
+  if (process.platform === "win32") {
+    const userProfile = process.env.USERPROFILE || "";
+    if (name === "yt-dlp") {
+      const wingetPath = path.join(
+        userProfile,
+        "AppData/Local/Microsoft/WinGet/Packages/yt-dlp.yt-dlp_Microsoft.Winget.Source_8wekyb3d8bbwe/yt-dlp.exe"
+      );
+      if (fs.existsSync(wingetPath)) return wingetPath;
+    } else {
+      const wingetPath = path.join(
+        userProfile,
+        "AppData/Local/Microsoft/WinGet/Packages/Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-9.0.1-essentials_build/bin/ffmpeg.exe"
+      );
+      if (fs.existsSync(wingetPath)) return wingetPath;
+
+      const altWinget = path.join(
+        userProfile,
+        "AppData/Local/Microsoft/WinGet/Packages/yt-dlp.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe/ffmpeg-N-126374-g089a48eb36-win64-gpl/bin/ffmpeg.exe"
+      );
+      if (fs.existsSync(altWinget)) return altWinget;
+    }
+  }
+
+  return name;
+}
+
 export class MediaService implements IMediaService {
   private downloadsDir: string;
   private tempDir: string;
@@ -46,8 +78,10 @@ export class MediaService implements IMediaService {
 
     // If already downloaded, return immediately
     if (fs.existsSync(targetFile)) {
-      return targetFile;
+      return `storage/downloads/${videoId}.mp4`;
     }
+
+    const ytdlpBin = resolveExecutable("yt-dlp");
 
     return new Promise((resolve, reject) => {
       const args = [
@@ -57,10 +91,12 @@ export class MediaService implements IMediaService {
         "--no-playlist",
         "--no-warnings",
         "-f",
+        "b[ext=mp4]/best[ext=mp4]/best",
+        "--merge-output-format",
         "mp4",
       ];
 
-      const proc = spawn("yt-dlp", args, { stdio: ["ignore", "pipe", "pipe"] });
+      const proc = spawn(ytdlpBin, args, { stdio: ["ignore", "pipe", "pipe"] });
 
       let stderr = "";
       proc.stderr.on("data", (chunk) => {
@@ -114,7 +150,8 @@ export class MediaService implements IMediaService {
         audioPath,
       ];
 
-      const proc = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+      const ffmpegBin = resolveExecutable("ffmpeg");
+      const proc = spawn(ffmpegBin, args, { stdio: ["ignore", "pipe", "pipe"] });
 
       let stderr = "";
       proc.stderr.on("data", (chunk) => {
