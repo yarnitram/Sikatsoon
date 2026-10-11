@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { Heart, ChevronUp, ChevronDown, Flame, Sparkles } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
 import type { VideoItem } from "./feed-canvas";
 
 interface TheaterCanvasProps {
@@ -21,27 +20,50 @@ export function TheaterCanvas({
   onNext,
   onToggleSave,
 }: TheaterCanvasProps) {
-  const [isHeartPulsing, setIsHeartPulsing] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isHeartAnimating, setIsHeartAnimating] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  const triggerHeart = async () => {
+  const toggleSave = async () => {
     if (!currentVideo) return;
-    setIsHeartPulsing(true);
-    setTimeout(() => setIsHeartPulsing(false), 400);
+    setIsHeartAnimating(true);
+    setTimeout(() => setIsHeartAnimating(false), 300);
     await onToggleSave(currentVideo.id);
   };
 
-  // Keyboard navigation listeners
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    } else {
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  // Keyboard navigation shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown" || e.key === "j") {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "j" || e.key === "J") {
         e.preventDefault();
         onNext();
-      } else if (e.key === "ArrowUp" || e.key === "k") {
+      } else if (e.key === "ArrowUp" || e.key === "k" || e.key === "K") {
         e.preventDefault();
         onPrev();
-      } else if (e.key === " " && currentVideo) {
+      } else if (e.key === "l" || e.key === "L") {
         e.preventDefault();
-        triggerHeart();
+        toggleSave();
+      } else if (e.key === " ") {
+        e.preventDefault();
+        togglePlay();
       }
     };
 
@@ -51,89 +73,223 @@ export function TheaterCanvas({
 
   if (!currentVideo) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-neutral-500 bg-neutral-950">
-        <Sparkles className="w-10 h-10 mb-3 text-neutral-700 animate-pulse" />
-        <p className="text-sm font-medium text-neutral-400">No videos in this niche</p>
-        <p className="text-xs text-neutral-600 mt-1">Select another niche or fetch trending clips.</p>
-      </div>
+      <main className="flex-1 flex items-center justify-center relative bg-surface-container-lowest p-4 overflow-hidden">
+        <div className="flex flex-col items-center gap-3 text-on-surface-variant">
+          <span className="material-symbols-outlined text-4xl text-primary animate-pulse">
+            bolt
+          </span>
+          <p className="font-headline-sm text-sm">No videos found in this niche</p>
+          <p className="font-body-sm text-xs text-on-surface-variant/70">
+            Select another cluster from Stream Hub or track a new niche.
+          </p>
+        </div>
+      </main>
     );
   }
 
+  const formatCount = (n: number) => {
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+    return n.toString();
+  };
+
   return (
-    <section className="flex-1 h-screen bg-neutral-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Top Prev Control Button */}
-      <div className="mb-3 z-20">
+    <main className="flex-1 flex items-center justify-center relative bg-surface-container-lowest p-4 overflow-hidden select-none">
+      {/* Background tactical telemetry & coordinate accents */}
+      <div className="absolute top-4 left-6 pointer-events-none flex items-center gap-2 opacity-40">
+        <span className="font-data-badge text-xs text-tertiary">LATENCY: 42ms</span>
+        <span className="text-on-surface-variant text-xs">/</span>
+        <span className="font-data-badge text-xs text-on-surface-variant">NODE: US-EAST-VIRGINIA</span>
+      </div>
+      <div className="absolute bottom-4 left-6 pointer-events-none opacity-40">
+        <span className="font-data-badge text-xs text-secondary">
+          FEED_BURST_STABLE: 120 FPS PARSER
+        </span>
+      </div>
+
+      {/* 9:16 Vertical Video Monitor Card */}
+      <div className="h-[580px] w-[326px] max-h-[82vh] rounded-[24px] overflow-hidden relative bg-surface-container-high shadow-2xl flex flex-col justify-between group border border-surface-container-highest/50">
+        {/* Visual Video Content Mockup / Hybrid Player Layer */}
+        {currentVideo.localFilePath ? (
+          <video
+            ref={videoRef}
+            src={`/${currentVideo.localFilePath}`}
+            autoPlay
+            loop
+            muted={isMuted}
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <div
+            className="absolute inset-0 bg-cover bg-center brightness-[0.88] contrast-[1.05] group-hover:scale-[1.02] transition-transform duration-700 ease-out"
+            style={{
+              backgroundImage: `url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80')`,
+            }}
+          />
+        )}
+
+        {/* Gradient overlays for telemetry legibility */}
+        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-surface-container-lowest/80 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-surface-container-lowest via-surface-container-lowest/70 to-transparent pointer-events-none" />
+
+        {/* Top Micro Header Inside Video Card */}
+        <div className="relative z-10 p-3.5 flex items-center justify-between text-on-surface">
+          <div className="flex items-center gap-1.5">
+            <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-data-badge text-[10px] tracking-wider font-bold uppercase shadow">
+              BREAKOUT #{currentIndex + 1}
+            </span>
+            <span className="px-1.5 py-0.5 rounded bg-surface-container-lowest/80 backdrop-blur-md text-tertiary font-data-badge text-[10px] flex items-center gap-1 border border-surface-container-high/40">
+              <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" /> 4K HD
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setIsMuted(!isMuted)}
+              className="w-7 h-7 rounded-full bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-center text-on-surface hover:text-primary transition-colors border border-surface-container-high/40"
+              title={isMuted ? "Unmute" : "Mute"}
+            >
+              <span className="material-symbols-outlined text-sm">
+                {isMuted ? "volume_off" : "volume_up"}
+              </span>
+            </button>
+            <button
+              onClick={() => {
+                if (videoRef.current?.requestFullscreen) {
+                  videoRef.current.requestFullscreen();
+                }
+              }}
+              className="w-7 h-7 rounded-full bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-center text-on-surface hover:text-primary transition-colors border border-surface-container-high/40"
+              title="Fullscreen"
+            >
+              <span className="material-symbols-outlined text-sm">fullscreen</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Center subtle play/pause indicator */}
+        <div className="relative z-10 self-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <button
+            onClick={togglePlay}
+            className="w-12 h-12 rounded-full bg-primary-container text-on-primary flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all"
+          >
+            <span className="material-symbols-outlined text-2xl">
+              {isPlaying ? "pause" : "play_arrow"}
+            </span>
+          </button>
+        </div>
+
+        {/* Bottom Overlays: Creator, Sound Wave Ticker, Scrubber */}
+        <div className="relative z-10 p-3.5 flex flex-col gap-2">
+          {/* Audio wave ticker badge */}
+          <div className="inline-flex items-center gap-2 max-w-[240px] px-2.5 py-1 rounded-full bg-surface-container-lowest/85 backdrop-blur-md border border-surface-container-high/40">
+            <span className="material-symbols-outlined text-xs text-primary animate-pulse">
+              music_note
+            </span>
+            <span className="font-body-sm text-xs text-on-surface truncate">
+              ♫ original sound - #{currentVideo.niche} (trending)
+            </span>
+          </div>
+
+          {/* Creator Handle + Caption snippet */}
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5">
+              <span className="font-headline-sm text-sm font-bold text-on-surface drop-shadow-md">
+                @{currentVideo.authorUsername}
+              </span>
+              <span className="material-symbols-outlined text-xs text-tertiary">
+                verified
+              </span>
+            </div>
+            <p className="font-body-sm text-xs text-on-surface/90 line-clamp-2 drop-shadow leading-tight mt-0.5">
+              {currentVideo.caption || "Discover how this creator engineered breakout velocity..."}
+            </p>
+          </div>
+
+          {/* Scrub Bar with Crimson Indicator */}
+          <div className="flex flex-col gap-1 pt-1">
+            <div className="w-full h-1 bg-surface-container-high/80 rounded-full overflow-hidden relative cursor-pointer">
+              <div className="h-full bg-primary-container w-[42%] relative transition-all">
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-on-surface shadow-sm" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between font-data-badge text-[10px] text-on-surface-variant">
+              <span>00:18</span>
+              <span>00:45</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Floating Save / Heart Button Pill Pin on Right */}
+        <div className="absolute bottom-28 right-3.5 z-20 flex flex-col items-center gap-1">
+          <button
+            onClick={toggleSave}
+            id="likeBtn"
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-xl transition-all ${
+              currentVideo.isSaved
+                ? "bg-primary-container text-on-primary scale-105"
+                : "bg-surface-container-lowest/80 backdrop-blur-md text-on-surface hover:text-primary hover:bg-surface-container"
+            } ${isHeartAnimating ? "scale-125" : ""}`}
+            title={currentVideo.isSaved ? "Saved to Repurpose Lab" : "Save video"}
+          >
+            <span
+              className="material-symbols-outlined text-xl"
+              style={{ fontVariationSettings: currentVideo.isSaved ? "'FILL' 1" : "'FILL' 0" }}
+            >
+              favorite
+            </span>
+          </button>
+          <span className="font-data-badge text-[10px] font-bold text-on-surface drop-shadow">
+            {formatCount(currentVideo.likesCount)}
+          </span>
+
+          <button
+            onClick={toggleSave}
+            className={`w-9 h-9 mt-1 rounded-full backdrop-blur-md flex items-center justify-center transition-colors border border-surface-container-high/40 ${
+              currentVideo.isSaved
+                ? "bg-primary-container/30 text-primary"
+                : "bg-surface-container-lowest/80 text-on-surface hover:bg-surface-container"
+            }`}
+            title="Bookmark"
+          >
+            <span className="material-symbols-outlined text-base">bookmark</span>
+          </button>
+          <span className="font-data-badge text-[10px] text-on-surface drop-shadow">
+            {formatCount(currentVideo.sharesCount)}
+          </span>
+
+          <button
+            onClick={() => {
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(currentVideo.videoUrl);
+              }
+            }}
+            className="w-9 h-9 mt-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md text-on-surface flex items-center justify-center hover:bg-surface-container transition-colors border border-surface-container-high/40"
+            title="Share Video Link"
+          >
+            <span className="material-symbols-outlined text-base">share</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Canvas Vertical Scroller Chevrons on Far Right */}
+      <div className="absolute right-8 flex flex-col gap-3 z-30">
         <button
           onClick={onPrev}
           disabled={currentIndex === 0}
-          className="py-1.5 px-5 rounded-full bg-neutral-900/90 hover:bg-neutral-800 disabled:opacity-25 disabled:pointer-events-none text-xs font-semibold text-neutral-300 border border-neutral-800 flex items-center gap-1.5 backdrop-blur-md transition-all shadow-md hover:-translate-y-0.5"
-          title="Previous Video (Arrow Up / K)"
+          className="w-10 h-10 rounded-full bg-surface-container-high hover:bg-surface-container-highest text-on-surface hover:text-primary disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center shadow-lg transition-all active:scale-95 border border-surface-container-highest/60"
+          title="Previous Video (K / Arrow Up)"
         >
-          <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
-          <span>Prev</span>
+          <span className="material-symbols-outlined text-lg">expand_less</span>
         </button>
-      </div>
-
-      {/* 9:16 Video Frame Container */}
-      <div className="relative w-full max-w-[390px] aspect-[9/16] max-h-[calc(100vh-140px)] bg-neutral-900 rounded-[28px] overflow-hidden shadow-2xl border border-neutral-800 flex flex-col group">
-        {/* TikTok Official Player Iframe */}
-        <div className="relative flex-1 w-full bg-black">
-          <iframe
-            key={currentVideo.id}
-            src={`https://www.tiktok.com/embed/v2/${currentVideo.id}?lang=en-US`}
-            className="w-full h-full border-0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
-
-        {/* Floating Heart Bookmark Button */}
-        <button
-          onClick={triggerHeart}
-          className={`absolute right-4 bottom-14 z-30 w-12 h-12 rounded-full backdrop-blur-md transition-all duration-200 shadow-xl flex items-center justify-center ${
-            currentVideo.isSaved
-              ? "bg-rose-500 text-white scale-105 border border-rose-400/50"
-              : "bg-black/70 text-white border border-white/20 hover:scale-110"
-          } ${isHeartPulsing ? "scale-125" : ""}`}
-          title={currentVideo.isSaved ? "Saved to Repurpose Lab" : "Save video"}
-        >
-          <Heart
-            className={`w-5 h-5 ${
-              currentVideo.isSaved ? "fill-white text-white" : "text-white"
-            }`}
-          />
-        </button>
-
-        {/* Bottom Floating Author Pill on Canvas */}
-        <div className="absolute bottom-3 left-4 right-16 pointer-events-none z-20">
-          <div className="inline-flex items-center gap-2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 text-xs text-white">
-            <span className="font-semibold text-neutral-300 truncate max-w-[150px]">
-              @{currentVideo.authorUsername}
-            </span>
-            <span className="text-neutral-500">•</span>
-            <span className="inline-flex items-center gap-1 text-amber-400 font-bold text-[11px]">
-              <Flame className="w-3 h-3 fill-amber-400" />
-              {currentVideo.viralScore.toFixed(0)}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Next Control Button & Counter */}
-      <div className="mt-3 flex items-center gap-3 z-20">
         <button
           onClick={onNext}
           disabled={currentIndex >= totalCount - 1}
-          className="py-1.5 px-5 rounded-full bg-neutral-900/90 hover:bg-neutral-800 disabled:opacity-25 disabled:pointer-events-none text-xs font-semibold text-neutral-300 border border-neutral-800 flex items-center gap-1.5 backdrop-blur-md transition-all shadow-md hover:translate-y-0.5"
-          title="Next Video (Arrow Down / J)"
+          className="w-10 h-10 rounded-full bg-surface-container-high hover:bg-surface-container-highest text-on-surface hover:text-primary disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center shadow-lg transition-all active:scale-95 border border-surface-container-highest/60"
+          title="Next Video (J / Arrow Down)"
         >
-          <span>Next</span>
-          <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+          <span className="material-symbols-outlined text-lg">expand_more</span>
         </button>
-        <span className="text-[11px] font-mono text-neutral-500">
-          {currentIndex + 1} of {totalCount}
-        </span>
       </div>
-    </section>
+    </main>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { Plus, Hash, Layers, Globe, Clock } from "lucide-react";
 
 export interface NicheItem {
   id: string;
@@ -32,7 +31,6 @@ export function NicheSidebar({
   region,
   onRegionChange,
 }: NicheSidebarProps) {
-  const [isAdding, setIsAdding] = useState(false);
   const [newTag, setNewTag] = useState("");
 
   const handleAddSubmit = (e: React.FormEvent) => {
@@ -40,98 +38,107 @@ export function NicheSidebar({
     if (newTag.trim()) {
       onAddNiche(newTag.trim().replace(/^#/, ""));
       setNewTag("");
-      setIsAdding(false);
     }
   };
 
+  const tagColors: Record<string, string> = {
+    dropshipping: "text-secondary",
+    "ai-tools": "text-tertiary",
+    "fitness-gym": "text-outline",
+    finance: "text-secondary-fixed",
+    lifehacks: "text-primary",
+  };
+
   return (
-    <aside className="w-72 h-screen bg-neutral-900 border-r border-neutral-800 flex flex-col justify-between p-4 text-neutral-200 shrink-0">
-      <div className="space-y-4">
-        {/* App Title & Video Count Header */}
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center font-bold text-white text-xs shadow-md">
-              S
+    <aside className="w-[280px] shrink-0 h-full bg-surface-container-lowest flex flex-col justify-between p-4 border-r border-surface-container-high/60 select-none relative z-20">
+      <div className="flex flex-col gap-3">
+        {/* Sub-header & indexing counter */}
+        <div className="flex items-center justify-between pb-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-primary-container text-on-primary">
+              <span className="material-symbols-outlined text-sm">bolt</span>
+            </span>
+            <span className="font-headline-sm text-sm tracking-tight text-on-surface font-bold">
+              Stream Hub
+            </span>
+          </div>
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container-high font-data-badge text-[11px] text-tertiary border border-surface-container-highest/60">
+            <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-ping" />
+            {totalVideosCount.toLocaleString()} idx
+          </span>
+        </div>
+
+        {/* Search / Track tag form */}
+        <form onSubmit={handleAddSubmit} className="relative flex items-center">
+          <input
+            type="text"
+            placeholder="Track new #niche..."
+            value={newTag}
+            onChange={(e) => setNewTag(e.target.value)}
+            className="w-full bg-surface-container-low text-on-surface font-body-sm text-xs pl-3 pr-8 py-2 rounded-lg outline-none focus:bg-surface-container border border-surface-container-high/60 focus:border-primary-container transition-all placeholder:text-on-surface-variant/50"
+          />
+          <button
+            type="submit"
+            className="absolute right-1.5 p-1 rounded bg-surface-container-high hover:bg-primary-container hover:text-on-primary text-on-surface-variant transition-colors"
+            title="Add Niche"
+          >
+            <span className="material-symbols-outlined text-xs">add</span>
+          </button>
+        </form>
+
+        {/* Niches List */}
+        <div className="flex flex-col gap-1 pt-1">
+          <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider px-1 mb-1 font-semibold">
+            Monitored Clusters
+          </span>
+
+          {/* All Niches Pill */}
+          <button
+            onClick={() => onSelectNiche("")}
+            className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-all group ${
+              !selectedNiche
+                ? "bg-primary-container/20 text-on-surface border border-primary-container/30 shadow-sm"
+                : "hover:bg-surface-container-high/60 text-on-surface-variant hover:text-on-surface"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className={`material-symbols-outlined text-sm ${
+                  !selectedNiche ? "text-primary" : "text-on-surface-variant"
+                }`}
+              >
+                view_carousel
+              </span>
+              <span className="font-body-md text-xs font-medium text-on-surface">
+                All Niches
+              </span>
             </div>
-            <h1 className="font-bold text-sm tracking-tight text-white">Sikatsoon</h1>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700">
-              Lab
+            <span className="font-data-badge text-[11px] px-1.5 py-0.5 rounded bg-surface-container-lowest text-primary">
+              {totalVideosCount}
             </span>
-          </div>
+          </button>
 
-          <div className="flex items-center justify-between text-xs text-neutral-400 px-1 pt-1">
-            <span className="flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-neutral-500" />
-              <span>Library</span>
-            </span>
-            <span className="font-semibold text-neutral-200">
-              Total: {totalVideosCount.toLocaleString()} Videos
-            </span>
-          </div>
-        </div>
-
-        {/* Add Niche Action */}
-        <div>
-          {isAdding ? (
-            <form onSubmit={handleAddSubmit} className="space-y-2">
-              <input
-                type="text"
-                autoFocus
-                placeholder="e.g. dropshipping"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                className="w-full px-3 py-1.5 bg-neutral-950 border border-rose-500 rounded-lg text-xs text-white focus:outline-none"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-1 bg-rose-500 text-white rounded-lg text-xs font-semibold hover:bg-rose-600"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsAdding(false)}
-                  className="px-3 py-1 bg-neutral-800 text-neutral-400 rounded-lg text-xs hover:text-white"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          ) : (
-            <button
-              onClick={() => setIsAdding(true)}
-              className="w-full py-2 px-3 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 text-xs text-neutral-300 font-medium flex items-center justify-center gap-2 transition-all group"
-            >
-              <Plus className="w-3.5 h-3.5 text-rose-400 group-hover:rotate-90 transition-transform" />
-              <span>Add Niche</span>
-            </button>
-          )}
-        </div>
-
-        {/* Niche List */}
-        <div>
-          <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block mb-2 px-1">
-            Curated Niches
-          </label>
-          <div className="space-y-1 max-h-[calc(100vh-340px)] overflow-y-auto pr-1">
+          {/* Individual Niches */}
+          <div className="flex flex-col gap-1 max-h-[calc(100vh-380px)] overflow-y-auto pr-0.5">
             {niches.map((niche) => {
-              const isSelected = selectedNiche === niche.tag;
+              const isSelected = selectedNiche.toLowerCase() === niche.tag.toLowerCase();
+              const hashColor = tagColors[niche.tag.toLowerCase()] || "text-secondary";
+
               return (
                 <button
                   key={niche.id}
                   onClick={() => onSelectNiche(niche.tag)}
-                  className={`w-full py-2 px-2.5 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                  className={`flex items-center justify-between w-full px-3 py-2 rounded-lg transition-all group ${
                     isSelected
-                      ? "bg-rose-500/10 text-rose-400 border border-rose-500/30"
-                      : "text-neutral-400 hover:text-white hover:bg-neutral-800/60"
+                      ? "bg-primary-container/20 text-on-surface border border-primary-container/30 shadow-sm"
+                      : "hover:bg-surface-container-high/60 text-on-surface-variant hover:text-on-surface"
                   }`}
                 >
-                  <span className="flex items-center gap-1.5 truncate">
-                    <Hash className={`w-3.5 h-3.5 ${isSelected ? "text-rose-400" : "text-neutral-500"}`} />
-                    <span className="truncate">{niche.tag}</span>
-                  </span>
-                  <span className="text-[11px] font-mono text-neutral-500 pl-2">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className={`font-data-badge text-xs ${hashColor}`}>#</span>
+                    <span className="font-body-md text-xs truncate">{niche.tag}</span>
+                  </div>
+                  <span className="font-data-badge text-[11px] px-1.5 py-0.5 rounded bg-surface-container-low text-on-surface-variant group-hover:bg-surface-container">
                     {niche.videoCount}
                   </span>
                 </button>
@@ -141,51 +148,68 @@ export function NicheSidebar({
         </div>
       </div>
 
-      {/* Bottom Controls: Timeframe & Region Filters */}
-      <div className="pt-3 border-t border-neutral-800 space-y-3">
-        {/* Timeframe Selector */}
-        <div>
-          <div className="flex items-center gap-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1.5">
-            <Clock className="w-3 h-3" />
-            <span>Timeframe</span>
-          </div>
-          <div className="grid grid-cols-3 gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800">
-            {(["24h", "7d", "30d"] as const).map((t) => (
+      {/* Bottom Filters & Controls */}
+      <div className="flex flex-col gap-3 pt-3 border-t border-surface-container-high/60">
+        {/* Rolling Velocity Window */}
+        <div className="flex flex-col gap-1">
+          <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider px-1 font-semibold">
+            Rolling Velocity Window
+          </span>
+          <div className="grid grid-cols-3 p-1 rounded-lg bg-surface-container-low text-center gap-0.5 border border-surface-container-high/50">
+            {(["24h", "7d", "30d"] as const).map((w) => (
               <button
-                key={t}
-                onClick={() => onTimeframeChange(t)}
-                className={`py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                  timeframe === t
-                    ? "bg-neutral-800 text-white shadow-sm"
-                    : "text-neutral-500 hover:text-white"
+                key={w}
+                onClick={() => onTimeframeChange(w)}
+                className={`py-1 rounded text-xs transition-colors ${
+                  timeframe === w
+                    ? "bg-surface-container-high text-primary font-semibold shadow-sm"
+                    : "text-on-surface-variant hover:text-on-surface"
                 }`}
               >
-                {t}
+                {w}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Region Selector */}
-        <div>
-          <div className="flex items-center gap-1.5 text-[10px] font-bold text-neutral-500 uppercase tracking-wider mb-1.5">
-            <Globe className="w-3 h-3" />
-            <span>Region</span>
-          </div>
-          <div className="grid grid-cols-4 gap-1 bg-neutral-950 p-1 rounded-xl border border-neutral-800">
+        {/* Tier-1 Geo Selection */}
+        <div className="flex flex-col gap-1">
+          <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider px-1 font-semibold">
+            Geo Filter
+          </span>
+          <div className="grid grid-cols-4 gap-1 font-data-badge text-xs text-center">
             {(["US", "UK", "CA", "AU"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => onRegionChange(r)}
-                className={`py-1 rounded-lg text-xs font-semibold transition-all ${
+                className={`py-1 rounded transition-colors ${
                   region === r
-                    ? "bg-neutral-800 text-white shadow-sm"
-                    : "text-neutral-500 hover:text-white"
+                    ? "bg-primary-container text-on-primary font-semibold shadow-sm"
+                    : "bg-surface-container-low text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high"
                 }`}
               >
                 {r}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Hotkey Legend */}
+        <div className="p-2 rounded-lg bg-surface-container-low/60 border border-surface-container-high/40 flex items-center justify-between font-label-caps text-[10px] text-on-surface-variant">
+          <div className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
+              J
+            </kbd>
+            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
+              K
+            </kbd>
+            <span className="ml-1 text-xs">Prev/Next</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-primary font-data-badge text-[10px]">
+              L
+            </kbd>
+            <span className="ml-1 text-xs">Save</span>
           </div>
         </div>
       </div>

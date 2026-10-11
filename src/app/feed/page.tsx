@@ -13,18 +13,18 @@ const INITIAL_NICHES: NicheItem[] = [
 const INITIAL_VIDEOS: VideoItem[] = [
   {
     id: "73829104859",
-    authorUsername: "ecommerce_ninja",
+    authorUsername: "ecom_scaling",
     region: "US",
     niche: "dropshipping",
     caption:
-      "POV: You found the #1 winning product that generated $42k in 3 days with zero ad spend...",
+      "Watch this portable magnetic accessory do $140K in test phase. Scaled via zero ad spend organically. Breakdown 👇",
     viewsCount: 1240000,
     likesCount: 142000,
-    commentsCount: 3800,
+    commentsCount: 3820,
     sharesCount: 18400,
     viralScore: 94.2,
     publishedAt: Math.floor(Date.now() / 1000) - 3600 * 3,
-    videoUrl: "https://www.tiktok.com/@ecommerce_ninja/video/73829104859",
+    videoUrl: "https://www.tiktok.com/@ecom_scaling/video/73829104859",
     isSaved: true,
   },
   {

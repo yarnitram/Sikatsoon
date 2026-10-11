@@ -11,7 +11,7 @@ import { mediaService } from "@/services/media-service";
 // 1. Zod Validation Schemas
 // ============================================================================
 
-export const MediaActionInputSchema = z.object({
+const MediaActionInputSchema = z.object({
   videoId: z.string().min(1, "Video ID is required"),
 });
 

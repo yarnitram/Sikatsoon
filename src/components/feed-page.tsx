@@ -5,6 +5,7 @@ import { NicheSidebar, type NicheItem } from "./niche-sidebar";
 import { TheaterCanvas } from "./theater-canvas";
 import { AnalyticsPanel } from "./analytics-panel";
 import type { VideoItem } from "./feed-canvas";
+import { toggleBookmarkAction } from "@/app/actions/curate";
 
 interface FeedPageProps {
   initialVideos: VideoItem[];
@@ -29,9 +30,16 @@ export function FeedPage({ initialVideos, initialNiches }: FeedPageProps) {
   const savedCount = videos.filter((v) => v.isSaved).length;
 
   const handleToggleSave = async (videoId: string) => {
+    // Optimistic UI update
     setVideos((prev) =>
       prev.map((v) => (v.id === videoId ? { ...v, isSaved: !v.isSaved } : v))
     );
+
+    try {
+      await toggleBookmarkAction(videoId);
+    } catch (err) {
+      console.error("Failed to toggle bookmark on server", err);
+    }
   };
 
   const handleAddNiche = (tag: string) => {
@@ -43,8 +51,8 @@ export function FeedPage({ initialVideos, initialNiches }: FeedPageProps) {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex bg-neutral-950">
-      {/* 1. LEFT COLUMN: NICHES & LIBRARY */}
+    <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden flex bg-surface select-none">
+      {/* 1. LEFT COLUMN: STREAM HUB & FILTER ENGINE */}
       <NicheSidebar
         totalVideosCount={videos.length}
         niches={niches}
@@ -60,7 +68,7 @@ export function FeedPage({ initialVideos, initialNiches }: FeedPageProps) {
         onRegionChange={setRegion}
       />
 
-      {/* 2. CENTER COLUMN: THEATER (9:16 Canvas) */}
+      {/* 2. CENTER COLUMN: THEATER CANVAS (9:16 Vertical Monitor) */}
       <TheaterCanvas
         currentVideo={currentVideo}
         currentIndex={currentIndex}
@@ -72,7 +80,7 @@ export function FeedPage({ initialVideos, initialNiches }: FeedPageProps) {
         onToggleSave={handleToggleSave}
       />
 
-      {/* 3. RIGHT COLUMN: VIDEO ANALYTICS & REPURPOSE CTA */}
+      {/* 3. RIGHT COLUMN: TELEMETRY & REPURPOSE CTA */}
       <AnalyticsPanel
         currentVideo={currentVideo}
         savedCount={savedCount}

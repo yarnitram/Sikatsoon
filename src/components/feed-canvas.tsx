@@ -17,6 +17,8 @@ export interface VideoItem {
   publishedAt: number;
   videoUrl: string;
   isSaved: boolean;
+  localFilePath?: string | null;
+  downloadStatus?: "IDLE" | "DOWNLOADING" | "DOWNLOADED" | "FAILED";
 }
 
 interface FeedCanvasProps {

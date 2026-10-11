@@ -11,7 +11,7 @@ import { ApifyTikTokAdapter } from "@/ingestion/apify-adapter";
 // 1. Zod Validation Schemas
 // ============================================================================
 
-export const IngestionInputSchema = z.object({
+const IngestionInputSchema = z.object({
   niche: z
     .string()
     .min(2, "Niche must be at least 2 characters")
@@ -24,7 +24,7 @@ export const IngestionInputSchema = z.object({
 
 export type IngestionInput = z.infer<typeof IngestionInputSchema>;
 
-export const ToggleBookmarkSchema = z.object({
+const ToggleBookmarkSchema = z.object({
   videoId: z.string().min(1, "Video ID is required"),
 });
 
