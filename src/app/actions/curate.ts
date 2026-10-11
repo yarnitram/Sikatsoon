@@ -3,6 +3,10 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
+import { db, videos, niches } from "@/db";
+import { eq, desc } from "drizzle-orm";
+import { ApifyTikTokAdapter } from "@/ingestion/apify-adapter";
+
 // ============================================================================
 // 1. Zod Validation Schemas
 // ============================================================================
@@ -42,7 +46,7 @@ export interface ToggleBookmarkResult {
 }
 
 // ============================================================================
-// 3. Server Actions Implementation Contracts
+// 3. Server Actions Implementation
 // ============================================================================
 
 /**
@@ -64,17 +68,61 @@ export async function triggerIngestionAction(
   const { niche, region, timeframe, limit } = parseResult.data;
 
   try {
-    // In production codebase:
-    // 1. const rawVideos = await apifyAdapter.fetchTrending({ niche, region, limit });
-    // 2. const scored = rawVideos.map(v => ({ ...v, viralScore: calculateViralScore(v) }))
-    //    .filter(v => v.viewsCount >= 10000);
-    // 3. await db.insert(videos).values(scored).onConflictDoNothing();
-    
+    const adapter = new ApifyTikTokAdapter();
+    const rawVideos = await adapter.fetchTrending({ niche, region, limit });
+    const scoredVideos = adapter.processAndScore(rawVideos);
+
+    let inserted = 0;
+    for (const v of scoredVideos) {
+      await db
+        .insert(videos)
+        .values({
+          id: v.id,
+          authorUsername: v.authorUsername,
+          region: v.region,
+          niche: v.niche,
+          caption: v.caption,
+          viewsCount: v.views,
+          likesCount: v.likes,
+          sharesCount: v.shares,
+          commentsCount: v.comments,
+          viralScore: v.viralScore,
+          publishedAt: v.publishedAt,
+          videoUrl: v.videoUrl,
+          isSaved: false,
+          downloadStatus: "IDLE",
+          transcriptionStatus: "IDLE",
+        })
+        .onConflictDoUpdate({
+          target: videos.id,
+          set: {
+            viewsCount: v.views,
+            likesCount: v.likes,
+            sharesCount: v.shares,
+            commentsCount: v.comments,
+            viralScore: v.viralScore,
+          },
+        });
+      inserted++;
+    }
+
+    // Ensure the niche is registered in the niches table
+    await db
+      .insert(niches)
+      .values({
+        id: niche,
+        tag: niche,
+        displayName: niche.toUpperCase(),
+      })
+      .onConflictDoNothing();
+
     revalidatePath("/feed");
+    revalidatePath("/repurpose");
+
     return {
       success: true,
-      insertedCount: 15,
-      message: `Ingested trending videos for #${niche} (${region})`,
+      insertedCount: inserted,
+      message: `Ingested ${inserted} viral videos for #${niche} (${region})`,
     };
   } catch (error: any) {
     return {
@@ -102,14 +150,27 @@ export async function toggleBookmarkAction(
   }
 
   try {
-    // In production codebase:
-    // const existing = await db.query.videos.findFirst({ where: eq(videos.id, videoId) });
-    // const updated = await db.update(videos)
-    //   .set({ isSaved: !existing.isSaved })
-    //   .where(eq(videos.id, videoId))
-    //   .returning();
-    
-    const newSavedState = true; // placeholder toggle
+    const [existing] = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, videoId))
+      .limit(1);
+
+    if (!existing) {
+      return {
+        success: false,
+        isSaved: false,
+        videoId,
+        message: `Video ${videoId} not found in database`,
+      };
+    }
+
+    const newSavedState = !existing.isSaved;
+    await db
+      .update(videos)
+      .set({ isSaved: newSavedState })
+      .where(eq(videos.id, videoId));
+
     revalidatePath("/feed");
     revalidatePath("/repurpose");
 
@@ -127,3 +188,36 @@ export async function toggleBookmarkAction(
     };
   }
 }
+
+/**
+ * Query videos for the Feed from SQLite, ordered by viral score descending.
+ */
+export async function getFeedVideos(niche?: string) {
+  if (niche) {
+    return db
+      .select()
+      .from(videos)
+      .where(eq(videos.niche, niche.toLowerCase()))
+      .orderBy(desc(videos.viralScore));
+  }
+  return db.select().from(videos).orderBy(desc(videos.viralScore));
+}
+
+/**
+ * Query saved videos for the Repurpose Lab.
+ */
+export async function getSavedVideos() {
+  return db
+    .select()
+    .from(videos)
+    .where(eq(videos.isSaved, true))
+    .orderBy(desc(videos.viralScore));
+}
+
+/**
+ * Query all tracked niches with counts.
+ */
+export async function getNiches() {
+  return db.select().from(niches);
+}
+

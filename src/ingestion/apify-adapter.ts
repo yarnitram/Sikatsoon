@@ -50,7 +50,13 @@ export class ApifyTikTokAdapter implements IngestionAdapter {
   async fetchTrending(params: IngestionParams): Promise<RawScrapedVideo[]> {
     const { niche, region, limit = 20 } = params;
 
-    const endpoint = `https://api.apify.com/v2/acts/${this.actorId}/runs?token=${this.apiToken}`;
+    if (!this.apiToken) {
+      throw new IngestionNetworkError(
+        "APIFY_API_TOKEN is not configured. Please add your Apify token to .env.local."
+      );
+    }
+
+    const endpoint = `https://api.apify.com/v2/acts/${this.actorId}/run-sync-get-dataset-items?token=${this.apiToken}&timeout=120`;
 
     const actorInput = {
       searchQueries: [`#${niche}`],
@@ -74,17 +80,16 @@ export class ApifyTikTokAdapter implements IngestionAdapter {
       }
 
       if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
         throw new IngestionNetworkError(
-          `Apify API request failed with status HTTP ${response.status}`
+          `Apify API request failed with status HTTP ${response.status}: ${errorText}`
         );
       }
 
-      // In live environment, fetch dataset items from Apify run:
-      // const runData = await response.json();
-      // const datasetRes = await fetch(`https://api.apify.com/v2/datasets/${runData.data.defaultDatasetId}/items?token=${this.apiToken}`);
-      // const items = await datasetRes.json();
+      const items = await response.json();
+      const rawItems = Array.isArray(items) ? items : (items?.items || []);
 
-      return [];
+      return rawItems.map((item: any) => this.normalizeItem(item, niche, region));
     } catch (err: any) {
       if (err instanceof IngestionQuotaExceededError) {
         throw err;

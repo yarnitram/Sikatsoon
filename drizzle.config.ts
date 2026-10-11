@@ -8,5 +8,5 @@ export default defineConfig({
     url: "./storage/sikatsoon.db",
   },
   verbose: true,
-  strict: true,
+  strict: false,
 });

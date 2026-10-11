@@ -3,6 +3,10 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 
+import { db, videos } from "@/db";
+import { eq } from "drizzle-orm";
+import { mediaService } from "@/services/media-service";
+
 // ============================================================================
 // 1. Zod Validation Schemas
 // ============================================================================
@@ -53,13 +57,38 @@ export async function downloadMediaAction(
   }
 
   try {
-    // In production codebase:
-    // 1. await db.update(videos).set({ downloadStatus: 'DOWNLOADING' }).where(eq(videos.id, videoId));
-    // 2. const localPath = await mediaService.downloadVideo(videoId, video.videoUrl);
-    // 3. await db.update(videos).set({ downloadStatus: 'DOWNLOADED', localFilePath: localPath }).where(eq(videos.id, videoId));
+    const [video] = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, videoId))
+      .limit(1);
 
-    const localFilePath = `storage/downloads/${videoId}.mp4`;
+    if (!video) {
+      return {
+        success: false,
+        videoId,
+        downloadStatus: "FAILED",
+        message: `Video ${videoId} not found in database`,
+      };
+    }
+
+    // Set DOWNLOADING status
+    await db
+      .update(videos)
+      .set({ downloadStatus: "DOWNLOADING" })
+      .where(eq(videos.id, videoId));
+
+    // Invoke yt-dlp through mediaService
+    const localFilePath = await mediaService.downloadVideo(videoId, video.videoUrl);
+
+    // Set DOWNLOADED status and persist local path
+    await db
+      .update(videos)
+      .set({ downloadStatus: "DOWNLOADED", localFilePath })
+      .where(eq(videos.id, videoId));
+
     revalidatePath("/repurpose");
+    revalidatePath("/feed");
 
     return {
       success: true,
@@ -69,7 +98,13 @@ export async function downloadMediaAction(
       message: "Video downloaded successfully",
     };
   } catch (error: any) {
-    // Recovery: Catch yt-dlp error, mark status as FAILED without crashing server
+    // Set FAILED status on error
+    await db
+      .update(videos)
+      .set({ downloadStatus: "FAILED" })
+      .where(eq(videos.id, videoId))
+      .catch(() => {});
+
     return {
       success: false,
       videoId,
@@ -97,26 +132,66 @@ export async function transcribeMediaAction(
   }
 
   try {
-    // In production codebase:
-    // 1. const video = await db.query.videos.findFirst({ where: eq(videos.id, videoId) });
-    //    if (!video?.localFilePath) throw new Error("Video must be downloaded first");
-    // 2. await db.update(videos).set({ transcriptionStatus: 'PROCESSING' }).where(eq(videos.id, videoId));
-    // 3. const transcript = await mediaService.transcribeVideo(videoId, video.localFilePath);
-    // 4. await db.update(videos).set({ transcriptionStatus: 'COMPLETED', transcriptText: transcript }).where(eq(videos.id, videoId));
+    const [video] = await db
+      .select()
+      .from(videos)
+      .where(eq(videos.id, videoId))
+      .limit(1);
 
-    const sampleTranscript =
-      "POV: You found the #1 winning product that generated $42k in 3 days. Stop selling posture correctors and look at this ultrasonic jewelry cleaner.";
+    if (!video) {
+      return {
+        success: false,
+        videoId,
+        transcriptionStatus: "FAILED",
+        message: `Video ${videoId} not found in database`,
+      };
+    }
+
+    if (!video.localFilePath) {
+      return {
+        success: false,
+        videoId,
+        transcriptionStatus: "FAILED",
+        message: "Video file must be downloaded before transcription",
+      };
+    }
+
+    // Set PROCESSING status
+    await db
+      .update(videos)
+      .set({ transcriptionStatus: "PROCESSING" })
+      .where(eq(videos.id, videoId));
+
+    // Run ffmpeg audio extraction + Whisper-1 transcription
+    const transcriptText = await mediaService.transcribeVideo(
+      videoId,
+      video.localFilePath
+    );
+
+    // Set COMPLETED status and persist transcript
+    await db
+      .update(videos)
+      .set({ transcriptionStatus: "COMPLETED", transcriptText })
+      .where(eq(videos.id, videoId));
 
     revalidatePath("/repurpose");
+    revalidatePath("/feed");
 
     return {
       success: true,
       videoId,
       transcriptionStatus: "COMPLETED",
-      transcriptText: sampleTranscript,
+      transcriptText,
       message: "Transcription completed via Whisper-1",
     };
   } catch (error: any) {
+    // Set FAILED status on error
+    await db
+      .update(videos)
+      .set({ transcriptionStatus: "FAILED" })
+      .where(eq(videos.id, videoId))
+      .catch(() => {});
+
     return {
       success: false,
       videoId,
