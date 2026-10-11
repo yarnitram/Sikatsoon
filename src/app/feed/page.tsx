@@ -1,6 +1,8 @@
 import { FeedPage } from "@/components/feed-page";
 import type { VideoItem } from "@/components/feed-canvas";
 import type { NicheItem } from "@/components/niche-sidebar";
+import { db, videos, niches } from "@/db";
+import { desc } from "drizzle-orm";
 
 const INITIAL_NICHES: NicheItem[] = [
   { id: "1", tag: "dropshipping", videoCount: 142 },
@@ -93,6 +95,64 @@ const INITIAL_VIDEOS: VideoItem[] = [
   },
 ];
 
-export default function FeedRoute() {
-  return <FeedPage initialVideos={INITIAL_VIDEOS} initialNiches={INITIAL_NICHES} />;
+export const dynamic = "force-dynamic";
+
+export default async function FeedRoute() {
+  let dbVideos: VideoItem[] = [];
+  let dbNiches: NicheItem[] = [];
+
+  try {
+    const rawVideos = await db.select().from(videos).orderBy(desc(videos.viralScore));
+    if (rawVideos.length > 0) {
+      dbVideos = rawVideos.map((v) => ({
+        id: v.id,
+        authorUsername: v.authorUsername,
+        region: v.region as "US" | "UK" | "CA" | "AU",
+        niche: v.niche,
+        caption: v.caption || "",
+        viewsCount: v.viewsCount,
+        likesCount: v.likesCount,
+        sharesCount: v.sharesCount,
+        commentsCount: v.commentsCount,
+        viralScore: v.viralScore,
+        publishedAt: v.publishedAt,
+        videoUrl: v.videoUrl,
+        isSaved: Boolean(v.isSaved),
+        localFilePath: v.localFilePath,
+        downloadStatus: v.downloadStatus as any,
+      }));
+    }
+
+    const rawNiches = await db.select().from(niches);
+    if (rawNiches.length > 0) {
+      dbNiches = rawNiches.map((n) => {
+        const count = dbVideos.filter(
+          (v) => v.niche.toLowerCase() === n.tag.toLowerCase()
+        ).length;
+        return {
+          id: n.id,
+          tag: n.tag,
+          videoCount: count,
+        };
+      });
+    }
+  } catch (err) {
+    console.error("Failed to query SQLite feed videos:", err);
+  }
+
+  // Combine live videos with initial demo videos if needed
+  const finalVideos = dbVideos.length > 0 ? dbVideos : INITIAL_VIDEOS;
+  
+  // Combine niches
+  const nicheMap = new Map<string, number>();
+  INITIAL_NICHES.forEach((n) => nicheMap.set(n.tag.toLowerCase(), n.videoCount));
+  dbNiches.forEach((n) => nicheMap.set(n.tag.toLowerCase(), n.videoCount));
+
+  const finalNiches: NicheItem[] = Array.from(nicheMap.entries()).map(([tag, count], index) => ({
+    id: String(index + 1),
+    tag,
+    videoCount: count,
+  }));
+
+  return <FeedPage initialVideos={finalVideos} initialNiches={finalNiches} />;
 }
