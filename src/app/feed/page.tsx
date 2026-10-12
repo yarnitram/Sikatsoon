@@ -1,6 +1,7 @@
 import { FeedPage } from "@/components/feed-page";
 import type { VideoItem } from "@/components/feed-canvas";
 import type { NicheItem } from "@/components/niche-sidebar";
+import { getNicheGroupsAction, type NicheGroupWithMembers } from "@/app/actions/groups";
 import { db, videos, niches } from "@/db";
 import { desc } from "drizzle-orm";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function FeedRoute() {
   let dbVideos: VideoItem[] = [];
   let dbNiches: NicheItem[] = [];
+  let dbGroups: NicheGroupWithMembers[] = [];
 
   try {
     const rawVideos = await db.select().from(videos).orderBy(desc(videos.viralScore));
@@ -42,10 +44,18 @@ export default async function FeedRoute() {
         videoCount: count,
       };
     });
+
+    dbGroups = await getNicheGroupsAction();
   } catch (err) {
-    console.error("Failed to query SQLite feed videos:", err);
+    console.error("Failed to query SQLite feed videos & groups:", err);
   }
 
-  return <FeedPage initialVideos={dbVideos} initialNiches={dbNiches} />;
+  return (
+    <FeedPage
+      initialVideos={dbVideos}
+      initialNiches={dbNiches}
+      initialGroups={dbGroups}
+    />
+  );
 }
 
