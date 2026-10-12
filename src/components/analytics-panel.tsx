@@ -35,6 +35,38 @@ export function AnalyticsPanel({
     return (raw * 100).toFixed(1) + "%";
   };
 
+  const formatDateDetails = (timestampSecs?: number) => {
+    if (!timestampSecs) return { formatted: "Unknown", relative: "N/A" };
+    const date = new Date(timestampSecs * 1000);
+    const diffSecs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+
+    let relative = "";
+    if (diffSecs < 60) {
+      relative = "Just now";
+    } else if (diffSecs < 3600) {
+      relative = `${Math.floor(diffSecs / 60)}m ago`;
+    } else if (diffSecs < 86400) {
+      relative = `${Math.floor(diffSecs / 3600)}h ago`;
+    } else if (diffSecs < 86400 * 30) {
+      const days = Math.floor(diffSecs / 86400);
+      relative = days === 1 ? "Yesterday" : `${days}d ago`;
+    } else if (diffSecs < 86400 * 365) {
+      const months = Math.floor(diffSecs / (86400 * 30));
+      relative = `${months}mo ago`;
+    } else {
+      const years = Math.floor(diffSecs / (86400 * 365));
+      relative = `${years}y ago`;
+    }
+
+    const formatted = date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    return { formatted, relative };
+  };
+
   const handleCopyHook = () => {
     if (!currentVideo?.caption) return;
     navigator.clipboard.writeText(currentVideo.caption);
@@ -65,6 +97,8 @@ export function AnalyticsPanel({
 
   const viralScoreRounded = Number(currentVideo.viralScore.toFixed(1));
   const isHighViral = viralScoreRounded >= 90;
+  const viralDate = formatDateDetails(currentVideo.publishedAt);
+  const addedDate = formatDateDetails(currentVideo.createdAt || currentVideo.publishedAt);
 
   return (
     <aside className="w-[340px] shrink-0 h-full bg-surface-container-lowest flex flex-col justify-between p-4 border-l border-surface-container-high/60 shadow-2xl overflow-y-auto select-none">
@@ -177,6 +211,49 @@ export function AnalyticsPanel({
             <span className="font-data-badge text-[10px] text-primary-container font-semibold">
               Breakout x4
             </span>
+          </div>
+        </div>
+
+        {/* Temporal Telemetry: Viral & Curation Timestamps */}
+        <div className="p-3 rounded-xl bg-surface-container-low border border-surface-container-high/40 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold">
+              Temporal Telemetry
+            </span>
+            <span className="font-data-badge text-[10px] text-tertiary flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" />
+              Verified Timestamp
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {/* Viral Published Date */}
+            <div className="p-2 rounded-lg bg-surface-container/70 border border-surface-container-high/50 flex flex-col gap-0.5">
+              <div className="flex items-center gap-1 text-on-surface-variant">
+                <span className="material-symbols-outlined text-xs text-primary">rocket_launch</span>
+                <span className="font-label-caps text-[9px] uppercase tracking-wider font-medium">Viral Date</span>
+              </div>
+              <span className="font-data-metric text-xs font-bold text-on-surface truncate" title={viralDate.formatted}>
+                {viralDate.formatted}
+              </span>
+              <span className="font-data-badge text-[10px] text-secondary">
+                {viralDate.relative}
+              </span>
+            </div>
+
+            {/* Added / Curated Date */}
+            <div className="p-2 rounded-lg bg-surface-container/70 border border-surface-container-high/50 flex flex-col gap-0.5">
+              <div className="flex items-center gap-1 text-on-surface-variant">
+                <span className="material-symbols-outlined text-xs text-tertiary">bookmark_added</span>
+                <span className="font-label-caps text-[9px] uppercase tracking-wider font-medium">Added to Lab</span>
+              </div>
+              <span className="font-data-metric text-xs font-bold text-on-surface truncate" title={addedDate.formatted}>
+                {addedDate.formatted}
+              </span>
+              <span className="font-data-badge text-[10px] text-on-surface-variant">
+                {addedDate.relative}
+              </span>
+            </div>
           </div>
         </div>
 

@@ -24,6 +24,7 @@ export default async function FeedRoute() {
       commentsCount: v.commentsCount,
       viralScore: v.viralScore,
       publishedAt: v.publishedAt,
+      createdAt: v.createdAt,
       videoUrl: v.videoUrl,
       isSaved: Boolean(v.isSaved),
       localFilePath: v.localFilePath,

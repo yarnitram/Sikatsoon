@@ -15,6 +15,7 @@ export interface VideoItem {
   commentsCount: number;
   viralScore: number;
   publishedAt: number;
+  createdAt?: number;
   videoUrl: string;
   isSaved: boolean;
   localFilePath?: string | null;

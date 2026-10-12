@@ -45,6 +45,7 @@ export interface FeedVideoItem {
   commentsCount: number;
   viralScore: number;
   publishedAt: number;
+  createdAt?: number;
   videoUrl: string;
   isSaved: boolean;
   localFilePath?: string | null;
@@ -286,6 +287,7 @@ export async function getFeedDataAction(): Promise<{
     commentsCount: v.commentsCount,
     viralScore: v.viralScore,
     publishedAt: v.publishedAt,
+    createdAt: v.createdAt,
     videoUrl: v.videoUrl,
     isSaved: Boolean(v.isSaved),
     localFilePath: v.localFilePath,

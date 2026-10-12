@@ -31,9 +31,20 @@ export function TheaterCanvas({
   const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
+  const [scrollDirection, setScrollDirection] = useState<"down" | "up">("down");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastScrollTimeRef = useRef<number>(0);
+
+  const handleNextWithAnim = () => {
+    setScrollDirection("down");
+    onNext();
+  };
+
+  const handlePrevWithAnim = () => {
+    setScrollDirection("up");
+    onPrev();
+  };
 
   // Reset timestamps when changing video
   useEffect(() => {
@@ -92,9 +103,9 @@ export function TheaterCanvas({
     lastScrollTimeRef.current = now;
 
     if (e.deltaY > 0) {
-      onNext();
+      handleNextWithAnim();
     } else {
-      onPrev();
+      handlePrevWithAnim();
     }
   };
 
@@ -106,10 +117,10 @@ export function TheaterCanvas({
       }
       if (e.key === "ArrowDown" || e.key === "j" || e.key === "J") {
         e.preventDefault();
-        onNext();
+        handleNextWithAnim();
       } else if (e.key === "ArrowUp" || e.key === "k" || e.key === "K") {
         e.preventDefault();
-        onPrev();
+        handlePrevWithAnim();
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         handleSeekDelta(-5);
@@ -158,6 +169,33 @@ export function TheaterCanvas({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
+  const formatVideoDate = (timestampSecs?: number) => {
+    if (!timestampSecs) return { date: "Recent", relative: "N/A" };
+    const date = new Date(timestampSecs * 1000);
+    const diffSecs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+
+    let relative = "";
+    if (diffSecs < 3600) {
+      relative = `${Math.max(1, Math.floor(diffSecs / 60))}m ago`;
+    } else if (diffSecs < 86400) {
+      relative = `${Math.floor(diffSecs / 3600)}h ago`;
+    } else if (diffSecs < 86400 * 30) {
+      relative = `${Math.floor(diffSecs / 86400)}d ago`;
+    } else if (diffSecs < 86400 * 365) {
+      relative = `${Math.floor(diffSecs / (86400 * 30))}mo ago`;
+    } else {
+      relative = `${Math.floor(diffSecs / (86400 * 365))}y ago`;
+    }
+
+    const dateStr = date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    return { date: dateStr, relative };
+  };
+
+  const videoDate = formatVideoDate(currentVideo.publishedAt);
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   const hasLocalVideo = Boolean(
@@ -181,8 +219,13 @@ export function TheaterCanvas({
         </span>
       </div>
 
-      {/* 9:16 Vertical Video Monitor Card */}
-      <div className="h-[580px] w-[326px] max-h-[82vh] rounded-[24px] overflow-hidden relative bg-surface-container-high shadow-2xl flex flex-col justify-between group border border-surface-container-highest/50">
+      {/* 9:16 Vertical Video Monitor Card - TikTok / Instagram Desktop Proportions */}
+      <div
+        key={currentVideo.id}
+        className={`h-[calc(100vh-5.5rem)] max-h-[820px] min-h-[580px] aspect-[9/16] w-auto rounded-[24px] overflow-hidden relative bg-surface-container-high shadow-2xl flex flex-col justify-between group border border-surface-container-highest/50 ${
+          scrollDirection === "down" ? "animate-slide-up" : "animate-slide-down"
+        }`}
+      >
         {/* Visual Video Content / Hybrid Player Layer */}
         {hasLocalVideo ? (
           <video
@@ -255,12 +298,19 @@ export function TheaterCanvas({
 
         {/* Top Micro Header Inside Video Card */}
         <div className="relative z-10 p-3.5 flex items-center justify-between text-on-surface">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="px-2 py-0.5 rounded bg-primary-container text-on-primary font-data-badge text-[10px] tracking-wider font-bold uppercase shadow">
               BREAKOUT #{currentIndex + 1}
             </span>
             <span className="px-1.5 py-0.5 rounded bg-surface-container-lowest/80 backdrop-blur-md text-tertiary font-data-badge text-[10px] flex items-center gap-1 border border-surface-container-high/40">
               <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" /> 4K HD
+            </span>
+            <span
+              className="px-2 py-0.5 rounded bg-surface-container-lowest/80 backdrop-blur-md text-on-surface-variant font-data-badge text-[10px] flex items-center gap-1 border border-surface-container-high/40"
+              title={`Published on ${videoDate.date}`}
+            >
+              <span className="material-symbols-outlined text-[11px] text-secondary">calendar_today</span>
+              <span>{videoDate.date} ({videoDate.relative})</span>
             </span>
           </div>
           <div className="flex items-center gap-1">
@@ -337,12 +387,15 @@ export function TheaterCanvas({
 
           {/* Creator Handle + Caption snippet */}
           <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span className="font-headline-sm text-sm font-bold text-on-surface drop-shadow-md">
                 @{currentVideo.authorUsername}
               </span>
               <span className="material-symbols-outlined text-xs text-tertiary">
                 verified
+              </span>
+              <span className="font-data-badge text-[10px] text-tertiary bg-surface-container-lowest/80 px-1.5 py-0.5 rounded backdrop-blur-md border border-surface-container-high/40">
+                Viral {videoDate.relative}
               </span>
             </div>
             <p className="font-body-sm text-xs text-on-surface/90 line-clamp-2 drop-shadow leading-tight mt-0.5">
@@ -444,7 +497,7 @@ export function TheaterCanvas({
       {/* Canvas Vertical Scroller Chevrons on Far Right */}
       <div className="absolute right-8 flex flex-col gap-3 z-30">
         <button
-          onClick={onPrev}
+          onClick={handlePrevWithAnim}
           disabled={currentIndex === 0}
           className="w-10 h-10 rounded-full bg-surface-container-high hover:bg-surface-container-highest text-on-surface hover:text-primary disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center shadow-lg transition-all active:scale-95 border border-surface-container-highest/60"
           title="Previous Video (K / Arrow Up)"
@@ -452,7 +505,7 @@ export function TheaterCanvas({
           <span className="material-symbols-outlined text-lg">expand_less</span>
         </button>
         <button
-          onClick={onNext}
+          onClick={handleNextWithAnim}
           disabled={currentIndex >= totalCount - 1}
           className="w-10 h-10 rounded-full bg-surface-container-high hover:bg-surface-container-highest text-on-surface hover:text-primary disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center shadow-lg transition-all active:scale-95 border border-surface-container-highest/60"
           title="Next Video (J / Arrow Down)"
