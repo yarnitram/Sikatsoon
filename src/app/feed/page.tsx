@@ -47,14 +47,13 @@ export default async function FeedRoute() {
 
     dbGroups = await getNicheGroupsAction();
   } catch (err) {
-    console.error("Failed to query SQLite feed videos & groups:", err);
+    console.error("Failed to query SQLite feed videos & niches:", err);
   }
 
   return (
     <FeedPage
       initialVideos={dbVideos}
       initialNiches={dbNiches}
-      initialGroups={dbGroups}
     />
   );
 }

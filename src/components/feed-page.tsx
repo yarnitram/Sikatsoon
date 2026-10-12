@@ -1,45 +1,38 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { NicheSidebar, type NicheItem } from "./niche-sidebar";
 import { TheaterCanvas } from "./theater-canvas";
 import { AnalyticsPanel } from "./analytics-panel";
 import type { VideoItem } from "./feed-canvas";
 import { toggleBookmarkAction, triggerIngestionAction } from "@/app/actions/curate";
-import {
-  type NicheGroupWithMembers,
-  createNicheGroupAction,
-  updateNicheGroupAction,
-  deleteNicheGroupAction,
-  triggerBatchGroupIngestionAction,
-} from "@/app/actions/groups";
 import { downloadMediaAction } from "@/app/actions/media";
+import {
+  type TagFilterChip,
+  type MatchMode,
+  type DiscoveryPack,
+  filterVideosByTags,
+  cycleChipState,
+} from "@/core/tag-filter";
 
 interface FeedPageProps {
   initialVideos: VideoItem[];
   initialNiches: NicheItem[];
-  initialGroups?: NicheGroupWithMembers[];
 }
 
 export function FeedPage({
   initialVideos,
   initialNiches,
-  initialGroups = [],
 }: FeedPageProps) {
   const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
   const [niches, setNiches] = useState<NicheItem[]>(initialNiches);
-  const [groups, setGroups] = useState<NicheGroupWithMembers[]>(initialGroups);
 
-  // Group & multi-niche selection state
-  const [selectedGroupId, setSelectedGroupId] = useState<string>(
-    initialGroups[0]?.id || ""
-  );
+  // Untpd Tag Filter Engine State
+  const [chips, setChips] = useState<TagFilterChip[]>([]);
+  const [matchMode, setMatchMode] = useState<MatchMode>("ANY");
+  const [customPacks, setCustomPacks] = useState<DiscoveryPack[]>([]);
 
-  const initialMemberNiches =
-    initialGroups[0]?.memberNiches ||
-    (initialNiches.length > 0 ? [initialNiches[0].tag] : []);
-
-  const [selectedNiches, setSelectedNiches] = useState<string[]>(initialMemberNiches);
+  // Navigation & Geo Filter state
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeframe, setTimeframe] = useState<"24h" | "7d" | "30d">("24h");
   const [region, setRegion] = useState<"US" | "UK" | "CA" | "AU">("US");
@@ -47,209 +40,119 @@ export function FeedPage({
   // Ingestion discovery & media state
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingNiche, setScrapingNiche] = useState<string | null>(null);
-  const [isBatchIngesting, setIsBatchIngesting] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
 
-  // Scheduler execution guard
-  const isCheckingScheduleRef = useRef(false);
+  // Load custom discovery packs from localStorage on client mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("sikatsoon_custom_discovery_packs");
+      if (stored) {
+        setCustomPacks(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn("Failed to read custom packs from localStorage", e);
+    }
+  }, []);
 
-  // Unified Viral Ranking across all selected niches
-  const filteredVideos = (
-    selectedNiches.length > 0
-      ? videos.filter((v) =>
-          selectedNiches.some((n) => n.toLowerCase() === v.niche.toLowerCase())
-        )
-      : videos
-  ).sort((a, b) => b.viralScore - a.viralScore);
+  // Untpd Tag Query Engine Filtering & Unified Viral Ranking
+  const { matchedVideos, yieldCount, excludedCount } = filterVideosByTags(
+    videos,
+    chips,
+    matchMode
+  );
 
-  const currentVideo = filteredVideos[currentIndex] || filteredVideos[0];
+  const currentVideo = matchedVideos[currentIndex] || matchedVideos[0];
   const savedCount = videos.filter((v) => v.isSaved).length;
 
   // ==========================================================================
-  // In-App Background Scheduler: Checks group schedules every 60 seconds
+  // Untpd Tag Chip Operations
   // ==========================================================================
-  useEffect(() => {
-    const checkSchedules = async () => {
-      if (isCheckingScheduleRef.current || isBatchIngesting || isScraping) return;
 
-      const now = new Date();
-      const currentEpoch = Math.floor(now.getTime() / 1000);
-      const currentHHMM = `${now.getHours().toString().padStart(2, "0")}:${now
-        .getMinutes()
-        .toString()
-        .padStart(2, "0")}`;
+  const handleAddChip = (rawTag: string, state: "include" | "exclude" = "include") => {
+    const clean = rawTag.toLowerCase().trim().replace(/^#/, "");
+    if (!clean) return;
 
-      for (const group of groups) {
-        if (!group.scheduleEnabled || group.memberNiches.length === 0) continue;
-
-        let isDue = false;
-
-        if (group.scheduleType === "daily") {
-          // Check if time matches and wasn't run in the last 12 hours
-          const lastRun = group.lastRunAt || 0;
-          const twelveHoursSec = 12 * 3600;
-          if (group.scheduleTime === currentHHMM && currentEpoch - lastRun > twelveHoursSec) {
-            isDue = true;
-          }
-        } else if (group.scheduleType === "interval") {
-          const intervalHours = parseFloat(group.scheduleTime) || 12;
-          const intervalSec = intervalHours * 3600;
-          const lastRun = group.lastRunAt || 0;
-          if (currentEpoch - lastRun >= intervalSec) {
-            isDue = true;
-          }
-        }
-
-        if (isDue) {
-          isCheckingScheduleRef.current = true;
-          setToast({
-            type: "info",
-            message: `⏰ Scheduled trigger: running batch ingestion for "${group.name}"...`,
-          });
-
-          try {
-            await handleTriggerBatchIngest(group.id, group.memberNiches);
-          } finally {
-            isCheckingScheduleRef.current = false;
-          }
-          break; // Process one group per tick
-        }
+    setChips((prev) => {
+      const exists = prev.find((c) => c.tag.toLowerCase() === clean);
+      if (exists) {
+        // Toggle or keep
+        return prev.map((c) => (c.tag.toLowerCase() === clean ? { ...c, state } : c));
       }
-    };
-
-    const timer = setInterval(checkSchedules, 60000);
-    return () => clearInterval(timer);
-  }, [groups, isBatchIngesting, isScraping]);
-
-  // ==========================================================================
-  // Group & Niche Selection Handlers
-  // ==========================================================================
-
-  const handleSelectGroup = (groupId: string) => {
-    setSelectedGroupId(groupId);
-    const targetGroup = groups.find((g) => g.id === groupId);
-    if (targetGroup) {
-      setSelectedNiches(targetGroup.memberNiches);
-    }
-    setCurrentIndex(0);
-  };
-
-  const handleToggleNiche = (nicheTag: string) => {
-    const clean = nicheTag.toLowerCase().trim();
-    setSelectedNiches((prev) => {
-      if (prev.includes(clean)) {
-        return prev.filter((t) => t !== clean);
-      } else {
-        return [...prev, clean];
-      }
+      return [...prev, { tag: clean, state }];
     });
     setCurrentIndex(0);
   };
 
-  const handleSelectAllNiches = () => {
-    const targetGroup = groups.find((g) => g.id === selectedGroupId);
-    if (targetGroup && targetGroup.memberNiches.length > 0) {
-      setSelectedNiches(targetGroup.memberNiches);
-    } else {
-      setSelectedNiches(niches.map((n) => n.tag.toLowerCase()));
-    }
+  const handleCycleChip = (rawTag: string) => {
+    const clean = rawTag.toLowerCase().trim().replace(/^#/, "");
+    setChips((prev) => {
+      const target = prev.find((c) => c.tag.toLowerCase() === clean);
+      if (!target) return prev;
+
+      const nextState = cycleChipState(target.state);
+      if (nextState === null) {
+        // Remove chip
+        return prev.filter((c) => c.tag.toLowerCase() !== clean);
+      }
+      return prev.map((c) => (c.tag.toLowerCase() === clean ? { ...c, state: nextState } : c));
+    });
     setCurrentIndex(0);
   };
 
-  const handleDeselectAllNiches = () => {
-    setSelectedNiches([]);
+  const handleRemoveChip = (rawTag: string) => {
+    const clean = rawTag.toLowerCase().trim().replace(/^#/, "");
+    setChips((prev) => prev.filter((c) => c.tag.toLowerCase() !== clean));
     setCurrentIndex(0);
   };
 
-  const handleCreateGroup = async (
-    name: string,
-    nicheTags: string[],
-    scheduleEnabled?: boolean,
-    scheduleType?: "daily" | "interval",
-    scheduleTime?: string
-  ) => {
-    const res = await createNicheGroupAction({
+  const handleClearChips = () => {
+    setChips([]);
+    setCurrentIndex(0);
+  };
+
+  const handleSelectDiscoveryPack = (pack: DiscoveryPack) => {
+    setChips(pack.chips);
+    setCurrentIndex(0);
+    setToast({
+      type: "info",
+      message: `⚡ Applied Discovery Pack: "${pack.name}" (${pack.chips.length} tags)`,
+    });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleSaveCustomPack = (name: string) => {
+    if (chips.length === 0) return;
+    const newPack: DiscoveryPack = {
+      id: `pack-${Date.now()}`,
       name,
-      nicheTags,
-      scheduleEnabled,
-      scheduleType,
-      scheduleTime,
-    });
-
-    if (res.success && res.group) {
-      setGroups((prev) => [res.group!, ...prev]);
-      setSelectedGroupId(res.group.id);
-      setSelectedNiches(res.group.memberNiches);
-      setCurrentIndex(0);
+      chips: [...chips],
+      isBuiltIn: false,
+    };
+    const updated = [...customPacks, newPack];
+    setCustomPacks(updated);
+    try {
+      localStorage.setItem("sikatsoon_custom_discovery_packs", JSON.stringify(updated));
       setToast({
         type: "success",
-        message: `Group "${name}" created with ${nicheTags.length} niches!`,
-      });
-      setTimeout(() => setToast(null), 4000);
-    } else {
-      setToast({
-        type: "error",
-        message: res.message || "Failed to create group",
-      });
-    }
-  };
-
-  const handleUpdateGroupSchedule = async (
-    groupId: string,
-    scheduleEnabled: boolean,
-    scheduleType: "daily" | "interval",
-    scheduleTime: string
-  ) => {
-    const res = await updateNicheGroupAction({
-      groupId,
-      scheduleEnabled,
-      scheduleType,
-      scheduleTime,
-    });
-
-    if (res.success) {
-      setGroups((prev) =>
-        prev.map((g) =>
-          g.id === groupId
-            ? { ...g, scheduleEnabled, scheduleType, scheduleTime }
-            : g
-        )
-      );
-      setToast({
-        type: "success",
-        message: `Schedule updated for group!`,
-      });
-      setTimeout(() => setToast(null), 4000);
-    } else {
-      setToast({
-        type: "error",
-        message: res.message || "Failed to update schedule",
-      });
-    }
-  };
-
-  const handleDeleteGroup = async (groupId: string) => {
-    const res = await deleteNicheGroupAction(groupId);
-    if (res.success) {
-      const remaining = groups.filter((g) => g.id !== groupId);
-      setGroups(remaining);
-      if (remaining.length > 0) {
-        setSelectedGroupId(remaining[0].id);
-        setSelectedNiches(remaining[0].memberNiches);
-      } else {
-        setSelectedGroupId("");
-        setSelectedNiches([]);
-      }
-      setCurrentIndex(0);
-      setToast({
-        type: "info",
-        message: "Group deleted.",
+        message: `Saved Discovery Pack "${name}"!`,
       });
       setTimeout(() => setToast(null), 3000);
+    } catch (e) {
+      console.warn("Failed to persist custom pack to localStorage", e);
+    }
+  };
+
+  const handleDeleteCustomPack = (packId: string) => {
+    const updated = customPacks.filter((p) => p.id !== packId);
+    setCustomPacks(updated);
+    try {
+      localStorage.setItem("sikatsoon_custom_discovery_packs", JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Failed to persist deletion to localStorage", e);
     }
   };
 
@@ -301,10 +204,8 @@ export function FeedPage({
           setNiches(res.niches);
         }
 
-        if (!selectedNiches.includes(clean)) {
-          setSelectedNiches((prev) => [...prev, clean]);
-        }
-        setCurrentIndex(0);
+        // Add to chips stack
+        handleAddChip(clean, "include");
       } else {
         setToast({
           type: "error",
@@ -320,69 +221,6 @@ export function FeedPage({
       setIsScraping(false);
       setScrapingNiche(null);
       setTimeout(() => setToast(null), 5000);
-    }
-  };
-
-  const handleTriggerBatchIngest = async (
-    groupId?: string,
-    targetNiches?: string[]
-  ) => {
-    const nichesToRun = targetNiches && targetNiches.length > 0 ? targetNiches : selectedNiches;
-    if (nichesToRun.length === 0) return;
-
-    setIsBatchIngesting(true);
-    setToast({
-      type: "info",
-      message: `Starting batch ingestion across ${nichesToRun.length} niches (${region})...`,
-    });
-
-    try {
-      const res = await triggerBatchGroupIngestionAction({
-        groupId,
-        nicheTags: nichesToRun,
-        region,
-        limit: 15,
-      });
-
-      if (res.success) {
-        setToast({
-          type: "success",
-          message: res.message,
-        });
-
-        if (res.videos && res.videos.length > 0) {
-          setVideos(res.videos);
-        }
-        if (res.niches && res.niches.length > 0) {
-          setNiches(res.niches);
-        }
-
-        // Update group's lastRunAt in local state
-        if (groupId) {
-          setGroups((prev) =>
-            prev.map((g) =>
-              g.id === groupId
-                ? { ...g, lastRunAt: Math.floor(Date.now() / 1000) }
-                : g
-            )
-          );
-        }
-
-        setCurrentIndex(0);
-      } else {
-        setToast({
-          type: "error",
-          message: res.message || "Batch ingestion failed.",
-        });
-      }
-    } catch (err: any) {
-      setToast({
-        type: "error",
-        message: err?.message || "Unexpected error during batch ingestion.",
-      });
-    } finally {
-      setIsBatchIngesting(false);
-      setTimeout(() => setToast(null), 6000);
     }
   };
 
@@ -428,10 +266,6 @@ export function FeedPage({
     }
   };
 
-  const handleAddNiche = (tag: string) => {
-    handleTriggerScrape(tag);
-  };
-
   return (
     <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden flex bg-surface select-none relative">
       {/* Dynamic Status Toast Banner */}
@@ -462,26 +296,29 @@ export function FeedPage({
         </div>
       )}
 
-      {/* 1. LEFT COLUMN: STREAM HUB & MULTI-NICHE FILTER ENGINE */}
+      {/* 1. LEFT COLUMN: UNTPD STREAM HUB & TAG-STACKING ENGINE */}
       <NicheSidebar
         totalVideosCount={videos.length}
         niches={niches}
-        groups={groups}
-        selectedGroupId={selectedGroupId}
-        onSelectGroup={handleSelectGroup}
-        onCreateGroup={handleCreateGroup}
-        onUpdateGroupSchedule={handleUpdateGroupSchedule}
-        onDeleteGroup={handleDeleteGroup}
-        selectedNiches={selectedNiches}
-        onToggleNiche={handleToggleNiche}
-        onSelectAllNiches={handleSelectAllNiches}
-        onDeselectAllNiches={handleDeselectAllNiches}
-        onAddNiche={handleAddNiche}
+        chips={chips}
+        onAddChip={handleAddChip}
+        onCycleChip={handleCycleChip}
+        onRemoveChip={handleRemoveChip}
+        onClearChips={handleClearChips}
+        matchMode={matchMode}
+        onMatchModeChange={(mode) => {
+          setMatchMode(mode);
+          setCurrentIndex(0);
+        }}
+        onSelectDiscoveryPack={handleSelectDiscoveryPack}
+        customPacks={customPacks}
+        onSaveCustomPack={handleSaveCustomPack}
+        onDeleteCustomPack={handleDeleteCustomPack}
+        yieldCount={yieldCount}
+        excludedCount={excludedCount}
         onTriggerScrape={handleTriggerScrape}
-        onTriggerBatchIngest={handleTriggerBatchIngest}
         isScraping={isScraping}
         scrapingNiche={scrapingNiche}
-        isBatchIngesting={isBatchIngesting}
         timeframe={timeframe}
         onTimeframeChange={setTimeframe}
         region={region}
@@ -492,10 +329,10 @@ export function FeedPage({
       <TheaterCanvas
         currentVideo={currentVideo}
         currentIndex={currentIndex}
-        totalCount={filteredVideos.length}
+        totalCount={matchedVideos.length}
         onPrev={() => setCurrentIndex((i) => Math.max(i - 1, 0))}
         onNext={() =>
-          setCurrentIndex((i) => Math.min(i + 1, filteredVideos.length - 1))
+          setCurrentIndex((i) => Math.min(i + 1, matchedVideos.length - 1))
         }
         onToggleSave={handleToggleSave}
         onDownloadVideo={handleDownloadVideo}
