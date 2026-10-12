@@ -27,7 +27,20 @@ export function TheaterCanvas({
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isHeartAnimating, setIsHeartAnimating] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isSeeking, setIsSeeking] = useState(false);
+  const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
+  const lastScrollTimeRef = useRef<number>(0);
+
+  // Reset timestamps when changing video
+  useEffect(() => {
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(true);
+  }, [currentVideo?.id]);
 
   const toggleSave = async () => {
     if (!currentVideo) return;
@@ -50,6 +63,41 @@ export function TheaterCanvas({
     }
   };
 
+  const handleSeekDelta = (deltaSeconds: number) => {
+    if (!videoRef.current) return;
+    const target = Math.max(
+      0,
+      Math.min(videoRef.current.duration || 0, videoRef.current.currentTime + deltaSeconds)
+    );
+    videoRef.current.currentTime = target;
+    setCurrentTime(target);
+    setSeekFeedback(deltaSeconds > 0 ? `+${deltaSeconds}s` : `${deltaSeconds}s`);
+    setTimeout(() => setSeekFeedback(null), 700);
+  };
+
+  const handleScrubChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+    }
+  };
+
+  // Mouse wheel scroll to advance or go back
+  const handleWheel = (e: React.WheelEvent) => {
+    if (Math.abs(e.deltaY) < 30) return;
+
+    const now = Date.now();
+    if (now - lastScrollTimeRef.current < 450) return;
+    lastScrollTimeRef.current = now;
+
+    if (e.deltaY > 0) {
+      onNext();
+    } else {
+      onPrev();
+    }
+  };
+
   // Keyboard navigation shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -62,6 +110,12 @@ export function TheaterCanvas({
       } else if (e.key === "ArrowUp" || e.key === "k" || e.key === "K") {
         e.preventDefault();
         onPrev();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        handleSeekDelta(-5);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        handleSeekDelta(5);
       } else if (e.key === "l" || e.key === "L") {
         e.preventDefault();
         toggleSave();
@@ -97,12 +151,24 @@ export function TheaterCanvas({
     return n.toString();
   };
 
+  const formatTime = (secs: number) => {
+    if (!secs || isNaN(secs) || secs < 0) return "00:00";
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
   const hasLocalVideo = Boolean(
     currentVideo.localFilePath || currentVideo.downloadStatus === "DOWNLOADED"
   );
 
   return (
-    <main className="flex-1 flex items-center justify-center relative bg-surface-container-lowest p-4 overflow-hidden select-none">
+    <main
+      onWheel={handleWheel}
+      className="flex-1 flex items-center justify-center relative bg-surface-container-lowest p-4 overflow-hidden select-none"
+    >
       {/* Background tactical telemetry & coordinate accents */}
       <div className="absolute top-4 left-6 pointer-events-none flex items-center gap-2 opacity-40">
         <span className="font-data-badge text-xs text-tertiary">LATENCY: 42ms</span>
@@ -126,6 +192,18 @@ export function TheaterCanvas({
             loop
             muted={isMuted}
             playsInline
+            onTimeUpdate={() => {
+              if (!isSeeking && videoRef.current) {
+                setCurrentTime(videoRef.current.currentTime);
+              }
+            }}
+            onLoadedMetadata={() => {
+              if (videoRef.current) {
+                setDuration(videoRef.current.duration || 0);
+              }
+            }}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
@@ -185,7 +263,21 @@ export function TheaterCanvas({
               <span className="w-1.5 h-1.5 rounded-full bg-tertiary animate-pulse" /> 4K HD
             </span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleSeekDelta(-5)}
+              className="w-7 h-7 rounded-full bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-center text-on-surface hover:text-primary transition-colors border border-surface-container-high/40"
+              title="Rewind 5s (Left Arrow)"
+            >
+              <span className="material-symbols-outlined text-sm">replay_5</span>
+            </button>
+            <button
+              onClick={() => handleSeekDelta(5)}
+              className="w-7 h-7 rounded-full bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-center text-on-surface hover:text-primary transition-colors border border-surface-container-high/40"
+              title="Forward 5s (Right Arrow)"
+            >
+              <span className="material-symbols-outlined text-sm">forward_5</span>
+            </button>
             <button
               onClick={() => setIsMuted(!isMuted)}
               className="w-7 h-7 rounded-full bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-center text-on-surface hover:text-primary transition-colors border border-surface-container-high/40"
@@ -221,6 +313,16 @@ export function TheaterCanvas({
           </button>
         </div>
 
+        {/* Floating seek feedback pill */}
+        {seekFeedback && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 px-3 py-1.5 rounded-full bg-surface-container-lowest/90 backdrop-blur-md border border-primary-container/40 text-primary font-data-badge text-xs flex items-center gap-1 shadow-2xl animate-pulse">
+            <span className="material-symbols-outlined text-xs">
+              {seekFeedback.startsWith("+") ? "fast_forward" : "fast_rewind"}
+            </span>
+            <span>{seekFeedback}</span>
+          </div>
+        )}
+
         {/* Bottom Overlays: Creator, Sound Wave Ticker, Scrubber */}
         <div className="relative z-10 p-3.5 flex flex-col gap-2">
           {/* Audio wave ticker badge */}
@@ -248,16 +350,41 @@ export function TheaterCanvas({
             </p>
           </div>
 
-          {/* Scrub Bar with Crimson Indicator */}
-          <div className="flex flex-col gap-1 pt-1">
-            <div className="w-full h-1 bg-surface-container-high/80 rounded-full overflow-hidden relative cursor-pointer">
-              <div className="h-full bg-primary-container w-[42%] relative transition-all">
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-on-surface shadow-sm" />
+          {/* Scrub Bar with Interactive Real-Time Scrubber */}
+          <div className="flex flex-col gap-1 pt-1 group/scrub">
+            <div className="relative w-full flex items-center h-4 cursor-pointer">
+              {/* Background track */}
+              <div className="absolute inset-x-0 h-1 bg-surface-container-high/90 rounded-full overflow-hidden pointer-events-none">
+                {/* Crimson Progress Fill */}
+                <div
+                  className="h-full bg-primary-container transition-[width] duration-75"
+                  style={{ width: `${progressPercent}%` }}
+                />
               </div>
+              {/* Native range slider */}
+              <input
+                type="range"
+                min={0}
+                max={duration > 0 ? duration : 100}
+                step={0.1}
+                value={currentTime}
+                onMouseDown={() => setIsSeeking(true)}
+                onMouseUp={() => setIsSeeking(false)}
+                onTouchStart={() => setIsSeeking(true)}
+                onTouchEnd={() => setIsSeeking(false)}
+                onChange={handleScrubChange}
+                className="w-full opacity-0 cursor-pointer z-10 h-full"
+                title="Seek video"
+              />
+              {/* Scrubber Knob indicator */}
+              <div
+                className="absolute w-2.5 h-2.5 rounded-full bg-on-surface shadow-md pointer-events-none transition-transform group-hover/scrub:scale-125 -translate-x-1/2"
+                style={{ left: `${progressPercent}%` }}
+              />
             </div>
             <div className="flex items-center justify-between font-data-badge text-[10px] text-on-surface-variant">
-              <span>00:18</span>
-              <span>00:45</span>
+              <span className="text-on-surface font-semibold">{formatTime(currentTime)}</span>
+              <span>{formatTime(duration)}</span>
             </div>
           </div>
         </div>

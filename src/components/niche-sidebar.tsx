@@ -251,21 +251,40 @@ export function NicheSidebar({
         </div>
 
         {/* Hotkey Legend */}
-        <div className="p-2 rounded-lg bg-surface-container-low/60 border border-surface-container-high/40 flex items-center justify-between font-label-caps text-[10px] text-on-surface-variant">
-          <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
-              J
-            </kbd>
-            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
-              K
-            </kbd>
-            <span className="ml-1 text-xs">Prev/Next</span>
+        <div className="flex flex-col gap-1 p-2 rounded-lg bg-surface-container-low/60 border border-surface-container-high/40 font-label-caps text-[10px] text-on-surface-variant">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
+                J
+              </kbd>
+              <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
+                K
+              </kbd>
+              <span className="ml-1 text-[11px]">or Scroll</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-primary font-data-badge text-[10px]">
+                L
+              </kbd>
+              <span className="text-[11px]">Save</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-primary font-data-badge text-[10px]">
-              L
-            </kbd>
-            <span className="ml-1 text-xs">Save</span>
+          <div className="flex items-center justify-between pt-1 border-t border-surface-container-high/40 text-[10px]">
+            <div className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
+                ←
+              </kbd>
+              <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
+                →
+              </kbd>
+              <span className="ml-1 text-[11px]">Seek -/+5s</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface font-data-badge text-[10px]">
+                Space
+              </kbd>
+              <span className="text-[11px]">Pause</span>
+            </div>
           </div>
         </div>
       </div>
