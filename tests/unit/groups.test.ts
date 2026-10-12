@@ -58,6 +58,8 @@ describe("Sikatsoon: Niche Groups & Multi-Niche Management", () => {
       name: "Health & Fitness",
       nicheTags: ["fitness", "gym"],
       scheduleEnabled: false,
+      scheduleType: "daily",
+      scheduleTime: "09:00",
     });
     expect(created.success).toBe(true);
     const groupId = created.group!.id;
@@ -87,6 +89,9 @@ describe("Sikatsoon: Niche Groups & Multi-Niche Management", () => {
     const created = await createNicheGroupAction({
       name: "Temporary Group",
       nicheTags: ["temp1", "temp2"],
+      scheduleEnabled: false,
+      scheduleType: "daily",
+      scheduleTime: "09:00",
     });
     const groupId = created.group!.id;
 

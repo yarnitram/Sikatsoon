@@ -172,9 +172,9 @@ export function FeedPage({
     }
   };
 
-  const handleTriggerScrape = async (targetTag: string) => {
+  const handleTriggerScrape = async (targetTag: string): Promise<boolean> => {
     const clean = targetTag.toLowerCase().trim().replace(/^#/, "");
-    if (!clean) return;
+    if (!clean) return false;
 
     setIsScraping(true);
     setScrapingNiche(clean);
@@ -206,17 +206,20 @@ export function FeedPage({
 
         // Add to chips stack
         handleAddChip(clean, "include");
+        return true;
       } else {
         setToast({
           type: "error",
           message: res.message || `Failed to ingest #${clean}. Check Apify token quota.`,
         });
+        return false;
       }
     } catch (err: any) {
       setToast({
         type: "error",
         message: err?.message || "Unexpected network error during ingestion.",
       });
+      return false;
     } finally {
       setIsScraping(false);
       setScrapingNiche(null);

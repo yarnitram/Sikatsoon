@@ -7,6 +7,7 @@ import { db, videos, niches } from "@/db";
 import { eq, desc } from "drizzle-orm";
 import { ApifyTikTokAdapter } from "@/ingestion/apify-adapter";
 import { mediaService } from "@/services/media-service";
+import { extractHashtagsFromCaption, POPULAR_VIRAL_NICHES } from "@/core/niche-catalog";
 
 // ============================================================================
 // 1. Zod Validation Schemas
@@ -100,6 +101,15 @@ export async function triggerIngestionAction(
     const rawVideos = await adapter.fetchTrending({ niche, region, limit });
     const scoredVideos = adapter.processAndScore(rawVideos);
 
+    // Empty Validation: do not insert or create empty DB rows if TikTok returns 0 videos
+    if (!scoredVideos || scoredVideos.length === 0) {
+      return {
+        success: false,
+        insertedCount: 0,
+        message: `No viral videos found on TikTok for #${niche}. Check spelling or try another keyword.`,
+      };
+    }
+
     let inserted = 0;
     for (const v of scoredVideos) {
       await db
@@ -134,7 +144,7 @@ export async function triggerIngestionAction(
       inserted++;
     }
 
-    // Ensure the niche is registered in the niches table
+    // Ensure the primary niche is registered in the niches table
     await db
       .insert(niches)
       .values({
@@ -143,6 +153,21 @@ export async function triggerIngestionAction(
         displayName: niche.toUpperCase(),
       })
       .onConflictDoNothing();
+
+    // Dynamically learn new hashtags from video captions to grow the niche catalog
+    for (const v of scoredVideos) {
+      const discoveredTags = extractHashtagsFromCaption(v.caption);
+      for (const tag of discoveredTags) {
+        await db
+          .insert(niches)
+          .values({
+            id: tag,
+            tag,
+            displayName: tag.toUpperCase(),
+          })
+          .onConflictDoNothing();
+      }
+    }
 
     // Auto-download top breakout videos (top 3) via yt-dlp so they are instantly playable
     const topBreakouts = scoredVideos.slice(0, 3);
@@ -294,7 +319,28 @@ export async function getFeedDataAction(): Promise<{
     downloadStatus: v.downloadStatus as any,
   }));
 
-  const rawNiches = await db.select().from(niches);
+  let rawNiches = await db.select().from(niches);
+
+  // Auto-seed any missing popular viral creator niches into the catalog
+  const existingTags = new Set(rawNiches.map((n) => n.tag.toLowerCase()));
+  const missingCurated = POPULAR_VIRAL_NICHES.filter(
+    (item) => !existingTags.has(item.tag.toLowerCase())
+  );
+
+  if (missingCurated.length > 0) {
+    for (const item of missingCurated) {
+      await db
+        .insert(niches)
+        .values({
+          id: item.tag,
+          tag: item.tag,
+          displayName: item.displayName,
+        })
+        .onConflictDoNothing();
+    }
+    rawNiches = await db.select().from(niches);
+  }
+
   const mappedNiches: NicheSummaryItem[] = rawNiches.map((n) => {
     const count = mappedVideos.filter(
       (v) => v.niche.toLowerCase() === n.tag.toLowerCase()
