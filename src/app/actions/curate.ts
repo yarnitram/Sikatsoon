@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db, videos, niches } from "@/db";
 import { eq, desc } from "drizzle-orm";
 import { ApifyTikTokAdapter } from "@/ingestion/apify-adapter";
+import { mediaService } from "@/services/media-service";
 
 // ============================================================================
 // 1. Zod Validation Schemas
@@ -141,6 +142,20 @@ export async function triggerIngestionAction(
         displayName: niche.toUpperCase(),
       })
       .onConflictDoNothing();
+
+    // Auto-download top breakout videos (top 3) via yt-dlp so they are instantly playable
+    const topBreakouts = scoredVideos.slice(0, 3);
+    for (const topVideo of topBreakouts) {
+      try {
+        const localPath = await mediaService.downloadVideo(topVideo.id, topVideo.videoUrl);
+        await db
+          .update(videos)
+          .set({ localFilePath: localPath, downloadStatus: "DOWNLOADED" })
+          .where(eq(videos.id, topVideo.id));
+      } catch (dlErr) {
+        console.warn(`Could not auto-download clip ${topVideo.id}:`, dlErr);
+      }
+    }
 
     revalidatePath("/feed");
     revalidatePath("/repurpose");

@@ -6,6 +6,7 @@ import { TheaterCanvas } from "./theater-canvas";
 import { AnalyticsPanel } from "./analytics-panel";
 import type { VideoItem } from "./feed-canvas";
 import { toggleBookmarkAction, triggerIngestionAction } from "@/app/actions/curate";
+import { downloadMediaAction } from "@/app/actions/media";
 
 interface FeedPageProps {
   initialVideos: VideoItem[];
@@ -16,15 +17,16 @@ export function FeedPage({ initialVideos, initialNiches }: FeedPageProps) {
   const [videos, setVideos] = useState<VideoItem[]>(initialVideos);
   const [niches, setNiches] = useState<NicheItem[]>(initialNiches);
   const [selectedNiche, setSelectedNiche] = useState<string>(
-    initialNiches[0]?.tag || "ai-tools"
+    initialNiches[0]?.tag || ""
   );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeframe, setTimeframe] = useState<"24h" | "7d" | "30d">("24h");
   const [region, setRegion] = useState<"US" | "UK" | "CA" | "AU">("US");
 
-  // Ingestion discovery state
+  // Ingestion discovery & media state
   const [isScraping, setIsScraping] = useState(false);
   const [scrapingNiche, setScrapingNiche] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     type: "success" | "error" | "info";
     message: string;
@@ -104,6 +106,50 @@ export function FeedPage({ initialVideos, initialNiches }: FeedPageProps) {
     }
   };
 
+  const handleDownloadVideo = async (videoId: string) => {
+    setDownloadingId(videoId);
+    setToast({
+      type: "info",
+      message: `Downloading watermark-free MP4 via yt-dlp...`,
+    });
+
+    try {
+      const res = await downloadMediaAction(videoId);
+      if (res.success) {
+        setVideos((prev) =>
+          prev.map((v) =>
+            v.id === videoId
+              ? {
+                  ...v,
+                  downloadStatus: "DOWNLOADED",
+                  localFilePath: res.localFilePath,
+                }
+              : v
+          )
+        );
+        setToast({
+          type: "success",
+          message: `✓ Video downloaded to local storage! Playing now.`,
+        });
+      } else {
+        setToast({
+          type: "error",
+          message: res.message || "Failed to download video.",
+        });
+      }
+    } catch (err: any) {
+      setToast({
+        type: "error",
+        message: err?.message || "Unexpected download error.",
+      });
+    } finally {
+      setDownloadingId(null);
+      setTimeout(() => {
+        setToast(null);
+      }, 5000);
+    }
+  };
+
   const handleAddNiche = (tag: string) => {
     handleTriggerScrape(tag);
   };
@@ -167,6 +213,8 @@ export function FeedPage({ initialVideos, initialNiches }: FeedPageProps) {
           setCurrentIndex((i) => Math.min(i + 1, filteredVideos.length - 1))
         }
         onToggleSave={handleToggleSave}
+        onDownloadVideo={handleDownloadVideo}
+        isDownloading={downloadingId === currentVideo?.id}
       />
 
       {/* 3. RIGHT COLUMN: TELEMETRY & REPURPOSE CTA */}

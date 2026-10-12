@@ -10,6 +10,8 @@ interface TheaterCanvasProps {
   onPrev: () => void;
   onNext: () => void;
   onToggleSave: (videoId: string) => Promise<void>;
+  onDownloadVideo?: (videoId: string) => Promise<void>;
+  isDownloading?: boolean;
 }
 
 export function TheaterCanvas({
@@ -19,6 +21,8 @@ export function TheaterCanvas({
   onPrev,
   onNext,
   onToggleSave,
+  onDownloadVideo,
+  isDownloading = false,
 }: TheaterCanvasProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
@@ -78,9 +82,9 @@ export function TheaterCanvas({
           <span className="material-symbols-outlined text-4xl text-primary animate-pulse">
             bolt
           </span>
-          <p className="font-headline-sm text-sm">No videos found in this niche</p>
-          <p className="font-body-sm text-xs text-on-surface-variant/70">
-            Select another cluster from Stream Hub or track a new niche.
+          <p className="font-headline-sm text-sm font-semibold">Stream Hub Standing By</p>
+          <p className="font-body-sm text-xs text-on-surface-variant/70 text-center max-w-xs">
+            No live videos in this cluster yet. Type a #niche in the sidebar to scrape and index trending TikToks.
           </p>
         </div>
       </main>
@@ -92,6 +96,10 @@ export function TheaterCanvas({
     if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
     return n.toString();
   };
+
+  const hasLocalVideo = Boolean(
+    currentVideo.localFilePath || currentVideo.downloadStatus === "DOWNLOADED"
+  );
 
   return (
     <main className="flex-1 flex items-center justify-center relative bg-surface-container-lowest p-4 overflow-hidden select-none">
@@ -109,23 +117,58 @@ export function TheaterCanvas({
 
       {/* 9:16 Vertical Video Monitor Card */}
       <div className="h-[580px] w-[326px] max-h-[82vh] rounded-[24px] overflow-hidden relative bg-surface-container-high shadow-2xl flex flex-col justify-between group border border-surface-container-highest/50">
-        {/* Visual Video Content Mockup / Hybrid Player Layer */}
-        {currentVideo.localFilePath ? (
+        {/* Visual Video Content / Hybrid Player Layer */}
+        {hasLocalVideo ? (
           <video
             ref={videoRef}
-            src={`/${currentVideo.localFilePath}`}
+            src={`/api/video/${currentVideo.id}`}
             autoPlay
             loop
             muted={isMuted}
+            playsInline
             className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
-          <div
-            className="absolute inset-0 bg-cover bg-center brightness-[0.88] contrast-[1.05] group-hover:scale-[1.02] transition-transform duration-700 ease-out"
-            style={{
-              backgroundImage: `url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80')`,
-            }}
-          />
+          <div className="absolute inset-0 bg-gradient-to-b from-surface-container to-surface-container-lowest flex flex-col items-center justify-center p-6 text-center z-0">
+            <div className="w-16 h-16 rounded-2xl bg-surface-container-high border border-primary-container/30 flex items-center justify-center mb-3 text-primary shadow-xl">
+              <span className="material-symbols-outlined text-4xl">play_circle</span>
+            </div>
+            <span className="font-headline-sm text-sm text-on-surface font-bold mb-1">
+              @{currentVideo.authorUsername}
+            </span>
+            <p className="font-body-sm text-xs text-on-surface-variant/80 line-clamp-3 mb-5 max-w-[240px]">
+              {currentVideo.caption || "Trending viral TikTok clip"}
+            </p>
+
+            <div className="flex flex-col gap-2.5 w-full max-w-[220px]">
+              {isDownloading ? (
+                <div className="py-2.5 px-3 rounded-xl bg-primary-container/20 border border-primary-container/40 text-primary flex items-center justify-center gap-2 text-xs font-medium animate-pulse shadow-md">
+                  <span className="material-symbols-outlined text-base animate-spin">
+                    progress_activity
+                  </span>
+                  <span>Downloading MP4 (~1.8s)...</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onDownloadVideo?.(currentVideo.id)}
+                  className="py-2.5 px-3.5 rounded-xl bg-primary-container hover:bg-primary-container/90 text-on-primary font-headline-sm text-xs font-semibold flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"
+                >
+                  <span className="material-symbols-outlined text-sm">download</span>
+                  <span>Download &amp; Play MP4</span>
+                </button>
+              )}
+
+              <a
+                href={currentVideo.videoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="py-2 px-3 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface font-body-sm text-[11px] flex items-center justify-center gap-1.5 transition-colors border border-surface-container-highest/60"
+              >
+                <span>Open in TikTok</span>
+                <span className="material-symbols-outlined text-xs">open_in_new</span>
+              </a>
+            </div>
+          </div>
         )}
 
         {/* Gradient overlays for telemetry legibility */}
